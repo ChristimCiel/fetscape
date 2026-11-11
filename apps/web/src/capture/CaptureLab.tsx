@@ -284,10 +284,28 @@ export default function CaptureLab({
     element.addEventListener('pointermove', pointerMove);
     element.addEventListener('pointerup', pointerEnd);
     element.addEventListener('pointercancel', pointerEnd);
+    const recordTrace = (sample: CaptureState) => {
+      if (sample.timeS < lastTrace) lastTrace = -1;
+      if (sample.timeS - lastTrace >= 0.25) {
+        const telemetryValue = telemetry(sample);
+        trace.current.push({
+          timeS: sample.timeS,
+          phase: sample.phase,
+          position: [...sample.position],
+          velocity: [...sample.velocity],
+          rangeM: telemetryValue.rangeM,
+          relativeSpeedMS: telemetryValue.relativeSpeedMS,
+          alignmentDeg: telemetryValue.alignmentDeg,
+        });
+        if (trace.current.length > 2400) trace.current.shift();
+        lastTrace = sample.timeS;
+      }
+    };
     const render = (now: number) => {
       if (disposed) return;
       const wall = (now - last) / 1000;
       last = now;
+      recordTrace(state.current);
       if (!previewRef.current && state.current.running) {
         const advanced = advanceCaptureFrame(
           state.current,
@@ -295,25 +313,11 @@ export default function CaptureLab({
           wall,
           speedRef.current,
           accumulator,
+          recordTrace,
         );
         state.current = advanced.state;
         accumulator = advanced.remainderS;
       } else accumulator = 0;
-      if (state.current.timeS - lastTrace >= 0.25) {
-        const telemetryValue = telemetry(state.current);
-        trace.current.push({
-          timeS: state.current.timeS,
-          phase: state.current.phase,
-          position: [...state.current.position],
-          velocity: [...state.current.velocity],
-          rangeM: telemetryValue.rangeM,
-          relativeSpeedMS: telemetryValue.relativeSpeedMS,
-          alignmentDeg: telemetryValue.alignmentDeg,
-        });
-        if (trace.current.length > 2400) trace.current.shift();
-        lastTrace = state.current.timeS;
-      }
-      if (state.current.timeS < lastTrace) lastTrace = -1;
       runtime.render(state.current);
       if (now - lastUI > 100) {
         setSnapshot(state.current);

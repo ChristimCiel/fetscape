@@ -18,6 +18,34 @@ describe('render-independent capture clock', () => {
     expect(slow.timeS).toBeCloseTo(24, 8);
     expect(slow).toEqual(fast);
   });
+  it('preserves quarter-second evidence samples during slow rendering', () => {
+    const collect = (frames: number, wallS: number) => {
+      let state = startCaptureRun(createCaptureState(), 'guided'),
+        remainderS = 0,
+        lastSample = 0;
+      const samples: { timeS: number; position: number[] }[] = [];
+      for (let i = 0; i < frames; i++) {
+        ({ state, remainderS } = advanceCaptureFrame(
+          state,
+          EMPTY_INPUT,
+          wallS,
+          8,
+          remainderS,
+          (sample) => {
+            if (sample.timeS - lastSample >= 0.25) {
+              samples.push({ timeS: sample.timeS, position: [...sample.position] });
+              lastSample = sample.timeS;
+            }
+          },
+        ));
+      }
+      return samples;
+    };
+    const sparse = collect(6, 0.5),
+      frequent = collect(180, 1 / 60);
+    expect(sparse).toEqual(frequent);
+    expect(sparse.length).toBeGreaterThan(90);
+  });
   it('does not advance a paused session or retain time for later catch-up', () => {
     const paused = createCaptureState();
     expect(advanceCaptureFrame(paused, EMPTY_INPUT, 600, 8, 0.004)).toEqual({
