@@ -108,6 +108,7 @@ export default function App() {
   }, []);
   const formDataset = datasets.find((d) => d.id === datasetId);
   async function openScriptOrbit() {
+    setPage('operations');
     setBusy(true);
     setError('');
     try {
@@ -127,7 +128,6 @@ export default function App() {
         setTime(Date.parse(e.tcaUtc));
       }
       setHistory(await api('/api/analyses'));
-      setPage('operations');
     } catch (e) {
       setError((e as Error).message);
     } finally {

@@ -82,8 +82,30 @@ test('Fetscape value proposition and fault comparison match the selected script'
   const data = JSON.parse(readFileSync((await downloaded.path())!, 'utf8'));
   expect(data.independentFaultEvidence.seed).toBe(7);
   expect(data.scriptReference).toContain('Fetscape');
-  await page.getByRole('button', { name: /Inspect orbital geometry/ }).click();
-  await expect(page.getByRole('heading', { name: 'Understand the encounter.' })).toBeVisible();
+  let releaseAnalysis!: () => void;
+  const pendingAnalysis = new Promise<void>((resolve) => {
+    releaseAnalysis = resolve;
+  });
+  await page.route('**/api/analyses', async (route) => {
+    if (route.request().method() === 'POST') await pendingAnalysis;
+    await route.continue();
+  });
+  const analysisResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/analyses') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  );
+  try {
+    await page.getByRole('button', { name: /Inspect orbital geometry/ }).click();
+    await expect(page.getByRole('heading', { name: 'Understand the encounter.' })).toBeVisible();
+    await expect(page.locator('.flight-viewport')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Calculating…', exact: true })).toBeDisabled();
+  } finally {
+    releaseAnalysis();
+  }
+  await analysisResponse;
+  await expect(page.getByRole('button', { name: 'Run analysis', exact: true })).toBeEnabled();
   await expect(page.getByText('FROZEN PUBLIC ELEMENTS', { exact: true })).toBeVisible();
   await expect(page.locator('.metrics .metric').nth(1)).toContainText('80.8');
 });
