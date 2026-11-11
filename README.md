@@ -6,6 +6,14 @@ A local software prototype for mission and GNC engineers to review orbital encou
 
 The current focus is mission verification and human decision support for collision-avoidance analysis and debris-removal mission planning. Image-based sensing, onboard relative navigation and autonomous flight control are not implemented.
 
+## Watch the demo
+
+[Watch on YouTube](https://youtu.be/4bYHXaUJ1cI) · Hackathon demo v3 · 78 seconds
+
+https://github.com/user-attachments/assets/ccbe06f6-58d4-44c2-aa6d-938eebec4296
+
+A narrated walkthrough of the Fetscape prototype and future mission concepts.
+
 ## Quick start
 
 Requires **Node.js 24.x** and npm. The API uses Node's built-in `node:sqlite`. Normal application use does not require Python, API keys, a cloud account or an external map service.
