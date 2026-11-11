@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.local/
+.env
+.env.*
+!.env.example
+*.sqlite*
+test-results/
+playwright-report/
+coverage/
+.venv/
+__pycache__/
+.DS_Store
+*.blend
+*.blend1
+research/rpo/results.json
+research/rpo/sweep-summary.json

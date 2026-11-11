@@ -1,0 +1,15 @@
+{
+  "selected": "Fetscape pitch and 90-second demo",
+  "decision": "Latest matching script found locally; applied to current software as requested. Original script files left unchanged.",
+  "sources": [
+    {
+      "name": "DEMO_90S.md",
+      "sha256": "67fb121c4d611e579f014b47ae2729dcfa1dc60a4e8e4dac2a1197ce42da6480"
+    },
+    {
+      "name": "PITCH_SCRIPT.md",
+      "sha256": "7451038066601dc7f6cc75c2e5f236fe23720f207c81eec40ac9a730ba54f4fd"
+    }
+  ],
+  "frozenModelSourceSha256": "304635003f08db3bc768565aca76899bae37202b0d7efcb74d41ff7a8a42fac2"
+}

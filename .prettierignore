@@ -1,0 +1,11 @@
+package-lock.json
+node_modules
+**/dist
+.local
+.venv
+test-results
+playwright-report
+tests/fixtures/sgp4-reference.json
+data/*.json
+docs/pitch/DEMO_90S.md
+docs/pitch/PITCH_SCRIPT.md

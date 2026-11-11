@@ -1,0 +1,207 @@
+{
+  "version": 1,
+  "generator": "Blender 5.2.2 LTS",
+  "classification": "user_supplied_concept_art",
+  "normalization": "Longest side = 2 viewer units; runtime spans are explicit synthetic assumptions, not physical dimensions.",
+  "animation": "Source files contain no rigs or actions. Rehearsal motion and gripper articulation are software-authored conceptual animation.",
+  "sourceFiles": [
+    {
+      "file": "Meshy_AI_debris_collector_lowpoly_20261111_texture_remesh_tri.blend",
+      "sha256": "5a7e97a639856abdd529f6d95b0923e6b5f7ef79de0408fda7c055505eb1e516",
+      "bytes": 33325291,
+      "meshCount": 1,
+      "triangles": 7370,
+      "armatures": [],
+      "actions": []
+    },
+    {
+      "file": "Meshy_AI_debris_collector_robot_20261111_image-to-3d-texture.blend",
+      "sha256": "00e74b8411bdcc3411703a6e08206a6599bee8b5ac376c0e9cd22962f89cdee0",
+      "bytes": 77213903,
+      "meshCount": 1,
+      "triangles": 702342,
+      "armatures": [],
+      "actions": []
+    },
+    {
+      "file": "Meshy_AI_debris_collector_split_20261111_part-segmentation_split.blend",
+      "sha256": "6e073cd1f7e7589a04c9da3536d894587ba1d50d1054b1aa27ac0ceb1d0790d5",
+      "bytes": 29739189,
+      "meshCount": 7,
+      "triangles": 18563,
+      "armatures": [],
+      "actions": []
+    },
+    {
+      "file": "Meshy_AI_debris_target_upper_stage_20261111_image-to-3d-texture (1).blend",
+      "sha256": "686694554626bf60867a005a458bd97aac7c763757e1a1f1c9c1bf07aa17adb5",
+      "bytes": 134777573,
+      "meshCount": 1,
+      "triangles": 1292783,
+      "armatures": [],
+      "actions": []
+    },
+    {
+      "file": "Meshy_AI_debris_target_upper_stage_20261111_image-to-3d-texture.blend",
+      "sha256": "686694554626bf60867a005a458bd97aac7c763757e1a1f1c9c1bf07aa17adb5",
+      "bytes": 134777573,
+      "meshCount": 1,
+      "triangles": 1292783,
+      "armatures": [],
+      "actions": []
+    },
+    {
+      "file": "Meshy_AI_lowpoly_orbital_debris_20261111_image-to-3d-texture.blend",
+      "sha256": "beaf4775c1f820c680ce7498ed107512510c25f87f30a3be70574ab17706d205",
+      "bytes": 55939795,
+      "meshCount": 1,
+      "triangles": 403808,
+      "armatures": [],
+      "actions": []
+    },
+    {
+      "file": "Meshy_AI_modular_caging_robotic_arm_20261111_image-to-3d-texture.blend",
+      "sha256": "b8802caaae161996465ff95cab51a87b9d527f6fd58f7fe56d2567800dee3907",
+      "bytes": 108153978,
+      "meshCount": 1,
+      "triangles": 971952,
+      "armatures": [],
+      "actions": []
+    },
+    {
+      "file": "Meshy_AI_orbital_debris_spacecraft_bus_20261111_image-to-3d-texture.blend",
+      "sha256": "d331549e9e84c783e37a6248ace70f2dc4e1b6bd9108b6aa883c472971d72360",
+      "bytes": 136011067,
+      "meshCount": 1,
+      "triangles": 1261651,
+      "armatures": [],
+      "actions": []
+    }
+  ],
+  "assets": [
+    {
+      "id": "collector-lowpoly",
+      "label": "Low-poly collector",
+      "role": "collector",
+      "uri": "/models/collector-lowpoly.glb",
+      "bytes": 710864,
+      "sha256": "7e2bfbd91ea8296f5a9fd30d6ea41d215315ef3804b0eb628e608312ad6c04db",
+      "triangles": 7370,
+      "parts": 1,
+      "textureMaxSize": 1024,
+      "sourceAliases": ["Meshy_AI_debris_collector_lowpoly_20261111_texture_remesh_tri.blend"],
+      "sourceSha256": "5a7e97a639856abdd529f6d95b0923e6b5f7ef79de0408fda7c055505eb1e516",
+      "sourceTriangles": 7370,
+      "sourceHasRig": false,
+      "sourceHasAnimation": false,
+      "extensions": ["EXT_texture_webp"]
+    },
+    {
+      "id": "collector-detailed",
+      "label": "Detailed collector",
+      "role": "collector",
+      "uri": "/models/collector-detailed.glb",
+      "bytes": 1878396,
+      "sha256": "48f81b8d63b8c8b4ca40916ee9455e6b5eb1980df682a6c04a740e6d881c83f7",
+      "triangles": 54998,
+      "parts": 1,
+      "textureMaxSize": 1024,
+      "sourceAliases": ["Meshy_AI_debris_collector_robot_20261111_image-to-3d-texture.blend"],
+      "sourceSha256": "00e74b8411bdcc3411703a6e08206a6599bee8b5ac376c0e9cd22962f89cdee0",
+      "sourceTriangles": 702342,
+      "sourceHasRig": false,
+      "sourceHasAnimation": false,
+      "extensions": ["EXT_texture_webp"]
+    },
+    {
+      "id": "collector-split",
+      "label": "Segmented collector",
+      "role": "collector",
+      "uri": "/models/collector-split.glb",
+      "bytes": 1924364,
+      "sha256": "cebddf1cead4e236e23333276fe26cc2745a808f57bd8b0c1ed39deef9f2b990",
+      "triangles": 18563,
+      "parts": 7,
+      "textureMaxSize": 1024,
+      "sourceAliases": ["Meshy_AI_debris_collector_split_20261111_part-segmentation_split.blend"],
+      "sourceSha256": "6e073cd1f7e7589a04c9da3536d894587ba1d50d1054b1aa27ac0ceb1d0790d5",
+      "sourceTriangles": 18563,
+      "sourceHasRig": false,
+      "sourceHasAnimation": false,
+      "extensions": ["EXT_texture_webp"]
+    },
+    {
+      "id": "upper-stage",
+      "label": "Upper-stage target",
+      "role": "target",
+      "uri": "/models/upper-stage.glb",
+      "bytes": 2053204,
+      "sha256": "b7ea096c575502dc3778d6bfb910d7716d932943dc4f0388b9024a412ea65356",
+      "triangles": 54999,
+      "parts": 1,
+      "textureMaxSize": 1024,
+      "sourceAliases": [
+        "Meshy_AI_debris_target_upper_stage_20261111_image-to-3d-texture (1).blend",
+        "Meshy_AI_debris_target_upper_stage_20261111_image-to-3d-texture.blend"
+      ],
+      "sourceSha256": "686694554626bf60867a005a458bd97aac7c763757e1a1f1c9c1bf07aa17adb5",
+      "sourceTriangles": 1292783,
+      "sourceHasRig": false,
+      "sourceHasAnimation": false,
+      "extensions": ["EXT_texture_webp"]
+    },
+    {
+      "id": "irregular-debris",
+      "label": "Irregular debris",
+      "role": "target",
+      "uri": "/models/irregular-debris.glb",
+      "bytes": 1668996,
+      "sha256": "458f63f295bdc70c4e67fa1bae5d51bb578c74d3186f65042c05dd54be87c74f",
+      "triangles": 55000,
+      "parts": 1,
+      "textureMaxSize": 1024,
+      "sourceAliases": ["Meshy_AI_lowpoly_orbital_debris_20261111_image-to-3d-texture.blend"],
+      "sourceSha256": "beaf4775c1f820c680ce7498ed107512510c25f87f30a3be70574ab17706d205",
+      "sourceTriangles": 403808,
+      "sourceHasRig": false,
+      "sourceHasAnimation": false,
+      "extensions": ["EXT_texture_webp"]
+    },
+    {
+      "id": "caging-arm",
+      "label": "Caging robotic arm",
+      "role": "equipment",
+      "uri": "/models/caging-arm.glb",
+      "bytes": 1969936,
+      "sha256": "252571e837412eb4c816095e52a4efc5c0d6ddc1cc53025f8068bfcc5dac2358",
+      "triangles": 54999,
+      "parts": 1,
+      "textureMaxSize": 1024,
+      "sourceAliases": ["Meshy_AI_modular_caging_robotic_arm_20261111_image-to-3d-texture.blend"],
+      "sourceSha256": "b8802caaae161996465ff95cab51a87b9d527f6fd58f7fe56d2567800dee3907",
+      "sourceTriangles": 971952,
+      "sourceHasRig": false,
+      "sourceHasAnimation": false,
+      "extensions": ["EXT_texture_webp"]
+    },
+    {
+      "id": "spacecraft-bus",
+      "label": "Spacecraft bus target",
+      "role": "target",
+      "uri": "/models/spacecraft-bus.glb",
+      "bytes": 2255300,
+      "sha256": "d30ab1014643379286320b2d8941778f9c188ed0f9b2875fc92dadebb558bf36",
+      "triangles": 54999,
+      "parts": 1,
+      "textureMaxSize": 1024,
+      "sourceAliases": [
+        "Meshy_AI_orbital_debris_spacecraft_bus_20261111_image-to-3d-texture.blend"
+      ],
+      "sourceSha256": "d331549e9e84c783e37a6248ace70f2dc4e1b6bd9108b6aa883c472971d72360",
+      "sourceTriangles": 1261651,
+      "sourceHasRig": false,
+      "sourceHasAnimation": false,
+      "extensions": ["EXT_texture_webp"]
+    }
+  ]
+}

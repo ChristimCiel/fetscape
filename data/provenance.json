@@ -1,0 +1,10 @@
+{
+  "source": "CelesTrak GP / stations, selected frozen subset",
+  "sourceUrl": "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=JSON",
+  "acquiredAt": "2026-11-10T12:46:39Z",
+  "referenceStart": "2026-11-11T12:00:00Z",
+  "originalObjectCount": 19,
+  "selectedObjectCount": 7,
+  "originalSnapshotSha256": "3274afc836c915a21ab77b1cf2b22af50cd5a1fbc7ca6bd77f3f14c75c13b502",
+  "note": "Copied from the pre-existing locally frozen snapshot. No new network request. This is a selected stations subset, not a debris catalog or complete conjunction screen. Names do not establish operational status or removal permission."
+}

@@ -1,0 +1,49 @@
+{
+  "name": "orbit-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web \"tsx watch apps/api/src/server.ts\" \"vite --config apps/web/vite.config.ts\"",
+    "check": "tsc --noEmit",
+    "build": "npm run check && vite build --config apps/web/vite.config.ts",
+    "start": "tsx apps/api/src/server.ts",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "verify": "npm test && npm run validate:reference && npm run validate:assets && npm run build && npm run format:check",
+    "validate:reference": "tsx scripts/validate-reference.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate:assets": "tsx scripts/validate-assets.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.10",
+    "fastify": "5.12.8",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "satellite.js": "7.1.0",
+    "three": "0.187.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "0.187.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "concurrently": "10.0.7",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@orbit/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./geometry": "./src/geometry.ts",
+    "./removal": "./src/removal.ts",
+    "./capture": "./src/capture.ts",
+    "./mechanism": "./src/mechanism.ts"
+  },
+  "dependencies": {
+    "satellite.js": "7.1.0",
+    "zod": "4.6.7"
+  }
+}
