@@ -78,7 +78,7 @@ npm run format:check
 
 If Chrome is already installed, use `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e`. Browser tests use a separate in-memory database on port `4188`, leaving user records untouched. Build before running E2E tests.
 
-GitHub Actions installs dependencies from a clean checkout and runs software verification, the paired fault-study reproduction, 11 Python research tests and Chromium E2E tests. Python 3.12 and NumPy are used for the independent research reproduction; the application does not need Python to run.
+GitHub Actions installs dependencies from a clean checkout and runs software verification, the paired fault-study reproduction, 11 Python research tests and Chrome E2E tests. CI uses the Chrome already provided by the pinned Ubuntu 24.04 runner and checks its availability before running the browser flows. Python 3.12 and NumPy are used for the independent research reproduction; the application does not need Python to run.
 
 The independent reference contains **18 python-sgp4 states** covering public GP data and Vallado near-Earth and deep-space TLE cases. Fixed inputs and expected results are included. Python is only needed to regenerate the fixture:
 
