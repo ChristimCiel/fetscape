@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Analysis, Decision, Encounter } from '@orbit/core';
 import { api, utc } from '../api';
+import { PUBLIC_DEMO } from '../deployment';
 import { Icon } from './Icon';
 export function ReviewPanel({
   run,
@@ -53,6 +54,7 @@ export function ReviewPanel({
             Action
             <select
               value={action}
+              disabled={PUBLIC_DEMO}
               onChange={(e) => setAction(e.target.value as Decision['action'])}
             >
               <option value="review">Continue review</option>
@@ -65,6 +67,7 @@ export function ReviewPanel({
             <input
               required
               maxLength={80}
+              disabled={PUBLIC_DEMO}
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
             />
@@ -75,19 +78,25 @@ export function ReviewPanel({
           <textarea
             required
             maxLength={4000}
+            disabled={PUBLIC_DEMO}
             rows={3}
             placeholder="What do we know, what is missing, and who should act next?"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
         </label>
-        <button className="button primary" disabled={saving || !note.trim() || !author.trim()}>
+        <button
+          className="button primary"
+          disabled={PUBLIC_DEMO || saving || !note.trim() || !author.trim()}
+        >
           {saving ? 'Saving…' : 'Save review record'}
           <Icon name="arrow" size={15} />
         </button>
       </form>
       <p className="fine-print">
-        Stored locally. Author labels are self-declared; no message or spacecraft command is sent.
+        {PUBLIC_DEMO
+          ? 'Saved reviews are available in the local edition. This public replay is read-only.'
+          : 'Stored locally. Author labels are self-declared; no message or spacecraft command is sent.'}
       </p>
       {filtered.length ? (
         <div className="review-log">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../components/Icon';
+import { assetUrl } from '../deployment';
 export interface FaultEvidence {
   kind: string;
   scenario: string;
@@ -17,7 +18,7 @@ export default function FaultReplay({ onEvidence }: { onEvidence: (data: FaultEv
     [error, setError] = useState('');
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/verification/weak-thrust-seed7.json', { signal: controller.signal })
+    fetch(assetUrl('verification/weak-thrust-seed7.json'), { signal: controller.signal })
       .then(async (r) => {
         if (!r.ok) throw new Error(`Replay HTTP ${r.status}`);
         return r.json();

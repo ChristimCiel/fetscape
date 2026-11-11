@@ -1,4 +1,7 @@
+import { PUBLIC_DEMO } from './deployment';
+
 export async function api<T>(path: string, body?: unknown): Promise<T> {
+  if (PUBLIC_DEMO) return (await import('./demo/public-api')).publicApi<T>(path, body);
   const response = await fetch(
     path,
     body === undefined

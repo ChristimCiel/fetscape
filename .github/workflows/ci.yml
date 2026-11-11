@@ -29,8 +29,35 @@ jobs:
       - name: Verify runner-provided Chrome
         run: google-chrome --version
       - run: npm run test:e2e
+      - run: npm run build:pages
+      - run: npm run test:pages
+      - name: Upload verified public demo
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/orbital-intelligence'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/web/dist
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: browser-test-results
           path: test-results/
+  deploy:
+    name: Deploy GitHub Pages
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/orbital-intelligence'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy verified public demo
+        id: deployment
+        uses: actions/deploy-pages@v4

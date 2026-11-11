@@ -15,6 +15,26 @@
   --green: #247c6b;
   --sidebar: #0d1928;
 }
+.public-demo-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  border: 1px solid #c8ddd4;
+  border-radius: 7px;
+  background: #edf6f0;
+  color: #456c5b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.public-demo-notice > span {
+  flex: 1 1 360px;
+}
+.public-demo-notice > a {
+  font-weight: 600;
+}
 * {
   box-sizing: border-box;
 }

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Analysis, Dataset, Decision, Encounter } from '@orbit/core';
 import { evaluateTarget } from '@orbit/core/removal';
 import { api, number, utc } from './api';
+import { PUBLIC_DEMO, downloadUrl } from './deployment';
 import { Icon } from './components/Icon';
 import { OrbitView, RangeChart, RelativeView } from './components/OrbitView';
 import { ReviewPanel } from './components/ReviewPanel';
@@ -71,7 +72,9 @@ function Countdown({ event, time }: { event: Encounter; time: number }) {
 }
 export default function App() {
   const [page, setPage] = useState<Page>(
-      () => NAV.find((n) => `#/${n[0]}` === location.hash)?.[0] ?? 'operations',
+      () =>
+        NAV.find((n) => `#/${n[0]}` === location.hash)?.[0] ??
+        (PUBLIC_DEMO ? 'capture' : 'operations'),
     ),
     [datasets, setDatasets] = useState<Dataset[]>([]),
     [run, setRun] = useState<Analysis | null>(null),
@@ -339,7 +342,7 @@ export default function App() {
         <div className="sidebar-bottom">
           <span className="local-mark">
             <i />
-            LOCAL RESEARCH BUILD
+            {PUBLIC_DEMO ? 'PUBLIC INTERACTIVE DEMO' : 'LOCAL RESEARCH BUILD'}
           </span>
           <p>
             Traceable inputs.
@@ -351,7 +354,10 @@ export default function App() {
           <div className="profile">
             <span>TC</span>
             <div>
-              Research workspace<small>Single-user · local storage</small>
+              Research workspace
+              <small>
+                {PUBLIC_DEMO ? 'Bundled orbital replays' : 'Single-user · local storage'}
+              </small>
             </div>
           </div>
         </div>
@@ -364,7 +370,7 @@ export default function App() {
           <div className="topbar-right">
             <span className="connection">
               <i />
-              Local API
+              {PUBLIC_DEMO ? 'Public demo' : 'Local API'}
             </span>
             <span className="build-label">v0.1 · Research preview</span>
           </div>
@@ -410,7 +416,10 @@ export default function App() {
               <div className="heading-actions">
                 <a
                   className="button secondary"
-                  href={page === 'removal' ? targetReportUrl : `/api/analyses/${run.id}/report`}
+                  href={downloadUrl(
+                    page === 'removal' ? targetReportUrl : `/api/analyses/${run.id}/report`,
+                  )}
+                  download
                 >
                   <Icon name="download" size={16} />
                   {page === 'removal' ? 'Target brief' : 'Export report'}
@@ -419,13 +428,26 @@ export default function App() {
                   className="icon-button"
                   aria-label="Export full analysis JSON"
                   title="Export full analysis JSON"
-                  href={`/api/analyses/${run.id}/export`}
+                  href={downloadUrl(`/api/analyses/${run.id}/export`)}
+                  download
                 >
                   <Icon name="layers" />
                 </a>
               </div>
             ) : null}
           </div>
+          {PUBLIC_DEMO ? (
+            <div className="public-demo-notice" role="note">
+              <strong>Public interactive demo</strong>
+              <span>
+                Explore capture controls, the fault comparison and bundled orbital replays. Imports,
+                new orbital calculations and saved reviews are available in the local edition.
+              </span>
+              <a href="https://github.com/ChristimCiel/fetscape" target="_blank" rel="noreferrer">
+                Run the full local edition ↗
+              </a>
+            </div>
+          ) : null}
           {error ? (
             <div role="alert" className="message error">
               <Icon name="info" />
@@ -475,7 +497,7 @@ export default function App() {
                   <select
                     aria-label="Primary object"
                     value={primaryId}
-                    disabled={busy}
+                    disabled={busy || PUBLIC_DEMO}
                     onChange={(e) => setPrimaryId(e.target.value)}
                   >
                     {formDataset?.objects.map((o) => (
@@ -492,7 +514,7 @@ export default function App() {
                     type="datetime-local"
                     required
                     value={start}
-                    disabled={busy}
+                    disabled={busy || PUBLIC_DEMO}
                     onChange={(e) => setStart(e.target.value)}
                   />
                 </label>
@@ -501,7 +523,7 @@ export default function App() {
                   <select
                     aria-label="Analysis window"
                     value={hours}
-                    disabled={busy}
+                    disabled={busy || PUBLIC_DEMO}
                     onChange={(e) => setHours(Number(e.target.value))}
                   >
                     {[1, 6, 12, 24].map((h) => (
@@ -516,7 +538,7 @@ export default function App() {
                   <select
                     aria-label="Geometry threshold"
                     value={threshold}
-                    disabled={busy}
+                    disabled={busy || PUBLIC_DEMO}
                     onChange={(e) => setThreshold(Number(e.target.value))}
                   >
                     {[10, 100, 500, 2000].map((k) => (
@@ -528,7 +550,13 @@ export default function App() {
                 </label>
                 <button className="button primary run-button" disabled={busy || !datasets.length}>
                   <Icon name={busy ? 'refresh' : 'arrow'} size={16} />
-                  {busy ? 'Calculating…' : 'Run analysis'}
+                  {busy
+                    ? PUBLIC_DEMO
+                      ? 'Loading…'
+                      : 'Calculating…'
+                    : PUBLIC_DEMO
+                      ? 'Load bundled replay'
+                      : 'Run analysis'}
                 </button>
               </form>
               {dirty ? (
@@ -974,7 +1002,9 @@ export default function App() {
               <section className="panel">
                 <div className="panel-heading">
                   <h2>Available snapshots</h2>
-                  <span className="plain-badge">OFFLINE AFTER INSTALL</span>
+                  <span className="plain-badge">
+                    {PUBLIC_DEMO ? 'BUNDLED REFERENCE DATA' : 'OFFLINE AFTER INSTALL'}
+                  </span>
                 </div>
                 <div className="dataset-grid">
                   {datasets.map((d) => (
@@ -1026,6 +1056,12 @@ export default function App() {
                   checksum-valid TLE. This importer does not accept CDMs, observation streams,
                   covariance, or credentials.
                 </p>
+                {PUBLIC_DEMO ? (
+                  <p className="public-demo-notice">
+                    Import is available in the local edition. The public demo uses the bundled
+                    snapshots above.
+                  </p>
+                ) : null}
                 <form onSubmit={importData}>
                   <div className="review-fields">
                     <label>
@@ -1033,6 +1069,7 @@ export default function App() {
                       <input
                         required
                         maxLength={100}
+                        disabled={PUBLIC_DEMO}
                         value={importName}
                         onChange={(e) => setImportName(e.target.value)}
                       />
@@ -1042,6 +1079,7 @@ export default function App() {
                       <input
                         required
                         maxLength={250}
+                        disabled={PUBLIC_DEMO}
                         placeholder="Provider, file date, and permission context"
                         value={importSource}
                         onChange={(e) => setImportSource(e.target.value)}
@@ -1051,6 +1089,7 @@ export default function App() {
                       Format
                       <select
                         value={importFormat}
+                        disabled={PUBLIC_DEMO}
                         onChange={(e) => setImportFormat(e.target.value)}
                       >
                         <option value="omm">GP / OMM-compatible JSON</option>
@@ -1064,13 +1103,14 @@ export default function App() {
                       required
                       rows={7}
                       value={importText}
+                      disabled={PUBLIC_DEMO}
                       onChange={(e) => setImportText(e.target.value)}
                       placeholder="Paste a GP JSON array or TLE records…"
                     />
                   </label>
                   <button
                     className="button primary"
-                    disabled={busy || !importText.trim() || !importSource.trim()}
+                    disabled={PUBLIC_DEMO || busy || !importText.trim() || !importSource.trim()}
                   >
                     Validate and import <Icon name="arrow" size={15} />
                   </button>
@@ -1081,8 +1121,8 @@ export default function App() {
           {page === 'history' ? (
             <section className="panel">
               <div className="panel-heading">
-                <h2>Saved analyses</h2>
-                <span className="plain-badge">LOCAL SQLITE</span>
+                <h2>{PUBLIC_DEMO ? 'Bundled analyses' : 'Saved analyses'}</h2>
+                <span className="plain-badge">{PUBLIC_DEMO ? 'READ-ONLY' : 'LOCAL SQLITE'}</span>
               </div>
               <div className="history-list">
                 {history.length ? (
@@ -1106,8 +1146,9 @@ export default function App() {
                 )}
               </div>
               <p className="fine-print">
-                Latest 50 runs. Saved calculations are immutable through this API; this is local
-                research storage, not a tamper-proof or authenticated audit system.
+                {PUBLIC_DEMO
+                  ? 'These reference runs are generated by the local API during the public build. No visitor data is saved to a server.'
+                  : 'Latest 50 runs. Saved calculations are immutable through this API; this is local research storage, not a tamper-proof or authenticated audit system.'}
               </p>
             </section>
           ) : null}
@@ -1229,7 +1270,10 @@ export default function App() {
           ) : null}
           <footer className="app-footer">
             <span>Fetscape · Plan the approach. Test the escape.</span>
-            <span>Local research software · Human review required</span>
+            <span>
+              {PUBLIC_DEMO ? 'Public research demo' : 'Local research software'} · Human review
+              required
+            </span>
           </footer>
         </main>
       </div>

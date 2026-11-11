@@ -4,6 +4,10 @@
 
 A local software prototype for mission and GNC engineers to review orbital encounters and early mission constraints using traceable data and deterministic calculations. The pilot hypothesis is that these scenarios can expose planning mistakes before execution.
 
+**[Open the public demo](https://christimciel.github.io/fetscape/#/capture)**
+
+The GitHub Pages edition includes interactive capture controls, mechanism cameras, model inspection, the degraded-thrust comparison, and two bundled orbital replays with downloadable evidence. Orbital results are calculated by the local API during the build and served read-only. New orbital calculations, imports and saved reviews are available in the local edition below. The public site runs without a shared backend or visitor database.
+
 The current focus is mission verification and human decision support for collision-avoidance analysis and debris-removal mission planning. Image-based sensing, onboard relative navigation and autonomous flight control are not implemented.
 
 ## Watch the demo
@@ -79,6 +83,8 @@ npm run format:check
 If Chrome is already installed, use `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e`. Browser tests use a separate in-memory database on port `4188`, leaving user records untouched. Build before running E2E tests.
 
 GitHub Actions installs dependencies from a clean checkout and runs software verification, the paired fault-study reproduction, 11 Python research tests and Chrome E2E tests. CI uses the Chrome already provided by the pinned Ubuntu 24.04 runner and checks its availability before running the browser flows. Python 3.12 and NumPy are used for the independent research reproduction; the application does not need Python to run.
+
+CI also builds the Pages edition and tests it under the `/fetscape/` project path. Only a successful push to the default branch can publish the verified artifact to GitHub Pages. To check the hosted edition locally, run `npm run build:pages` followed by `PLAYWRIGHT_CHANNEL=chrome npm run test:pages`, or use `npm run preview:pages` to explore it on port `4189`.
 
 The independent reference contains **18 python-sgp4 states** covering public GP data and Vallado near-Earth and deep-space TLE cases. Fixed inputs and expected results are included. Python is only needed to regenerate the fixture:
 

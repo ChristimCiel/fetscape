@@ -7,6 +7,7 @@ import { mechanismCycle, ARM_RIG } from '@orbit/core/mechanism';
 import { articulateArm, articulateCollector } from './mechanism-rig';
 import type { ArticulatedArm, CollectorMechanism } from './mechanism-rig';
 import manifest from './asset-manifest.json';
+import { assetUrl } from '../deployment';
 
 export type AssetId = (typeof manifest.assets)[number]['id'];
 export type SceneStatus = {
@@ -232,9 +233,9 @@ export function createCaptureScene(
     loads.set(slot, { version: current, controller });
     onStatus({ slot, id, status: 'loading' });
     try {
-      const response = await fetch(asset.uri, { signal: controller.signal });
+      const response = await fetch(assetUrl(asset.uri), { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const gltf = await loader.parseAsync(await response.arrayBuffer(), '/models/');
+      const gltf = await loader.parseAsync(await response.arrayBuffer(), assetUrl('models/'));
       if (disposed || loads.get(slot)?.version !== current) {
         release(gltf.scene);
         return;

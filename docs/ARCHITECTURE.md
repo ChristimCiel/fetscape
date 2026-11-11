@@ -46,6 +46,12 @@ Every dataset also stores `inputFormat` and `rawInput`. `contentSha256` is SHA-2
 
 This is a bounded, synchronous, single-process prototype: 2–24 objects, one primary vs. other distinct objects, 1–24 hours, 15–120 s search cadence, ±7 days of the primary epoch. The UI fixes cadence at 30 s. These bounds limit work and model misuse; they are not accuracy or safety criteria. History returns the latest 50 runs.
 
+## Public GitHub Pages edition
+
+`npm run build:pages` exports two reference analyses and their reports through the existing API using an isolated in-memory database, then builds with the `/fetscape/` base path. The browser's public adapter loads this bundled data and only accepts analysis requests whose complete parameters match an exported run. Changed parameters, imports and review writes are rejected rather than mapped to an unrelated cached result. Controls and copy identify the read-only boundary.
+
+The capture state machine and all model inspection, mechanism, fault replay and local JSON download features still run in the browser. Model, evidence and report URLs use Vite's base path. The static client imports no SGP4 runtime; propagation remains in the build-time API path. GitHub Actions tests both the local edition and the static project-path build before uploading and deploying the Pages artifact.
+
 ## Plotting contracts
 
 - The globe is an orthographic TEME inertial view. It uses a native SVG Earth/grid, not a geographic basemap, satellite imagery or an Earth-fixed frame.
