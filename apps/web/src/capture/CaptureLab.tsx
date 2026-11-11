@@ -8,11 +8,11 @@ import {
   recenterCapture,
   requestCapture,
   startCaptureRun,
-  stepCapture,
   telemetry,
 } from '@orbit/core/capture';
 import type { CaptureState, PilotInput, ScenarioId } from '@orbit/core/capture';
 import { Icon } from '../components/Icon';
+import { advanceCaptureFrame } from './clock';
 import { createCaptureScene } from './scene';
 import type { CaptureScene, SceneStatus, MechanismEvidence } from './scene';
 import { ARM_RIG, mechanismCycle } from '@orbit/core/mechanism';
@@ -286,15 +286,18 @@ export default function CaptureLab({
     element.addEventListener('pointercancel', pointerEnd);
     const render = (now: number) => {
       if (disposed) return;
-      const wall = Math.max(0, Math.min(0.08, (now - last) / 1000));
+      const wall = (now - last) / 1000;
       last = now;
       if (!previewRef.current && state.current.running) {
-        accumulator += wall * speedRef.current;
-        let count = 0;
-        while (accumulator >= CAPTURE_RULES.stepS && count++ < 100) {
-          state.current = stepCapture(state.current, input.current, CAPTURE_RULES.stepS);
-          accumulator -= CAPTURE_RULES.stepS;
-        }
+        const advanced = advanceCaptureFrame(
+          state.current,
+          input.current,
+          wall,
+          speedRef.current,
+          accumulator,
+        );
+        state.current = advanced.state;
+        accumulator = advanced.remainderS;
       } else accumulator = 0;
       if (state.current.timeS - lastTrace >= 0.25) {
         const telemetryValue = telemetry(state.current);

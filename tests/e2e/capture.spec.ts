@@ -176,7 +176,7 @@ test('model loading errors stay visible and a fresh 3D view can recover', async 
     route.fulfill({ status: 503, body: 'Injected asset failure' }),
   );
   await page.goto('/#/capture');
-  await expect(page.getByRole('alert')).toContainText('upper-stage: HTTP 503');
+  await expect(page.getByRole('alert')).toContainText('upper-stage: HTTP 503', { timeout: 30000 });
   await expect(page.locator('.capture-action')).toBeDisabled();
   await page.unroute('**/models/upper-stage.glb');
   await page.getByRole('button', { name: 'Reinitialize 3D view' }).click();

@@ -35,7 +35,7 @@
 
 ## 模型與門檻
 
-純計算狀態機位於 `packages/orbital-core/src/capture.ts`。使用固定 1/120 s 步長、局部合成 XYZ；Three.js 只畫出狀態。它沒有 SGP4、HCW、感測器、姿態動力學或接觸模型。`mechanism.ts` 定義序列與兩節手臂 IK；`mechanism-rig.ts` 把結果套到實際網格，屬運動學，不是力學求解。
+純計算狀態機位於 `packages/orbital-core/src/capture.ts`。使用固定 1/120 s 步長、局部合成 XYZ；Three.js 只畫出狀態。UI 在低 FPS 時保留固定步長累計；每畫面最多補算 1 秒 wall time／960 個步長，避免長時間停頓後無界追趕。切換分頁仍暫停，不會補算背景時間。它沒有 SGP4、HCW、感測器、姿態動力學或接觸模型。`mechanism.ts` 定義序列與兩節手臂 IK；`mechanism-rig.ts` 把結果套到實際網格，屬運動學，不是力學求解。
 
 - 起始中心距離：14 m；合成目標初始速度：nominal 0、drifting 有指定橫向速度。
 - scripted controller 的停駐中心距離：4.4 m。

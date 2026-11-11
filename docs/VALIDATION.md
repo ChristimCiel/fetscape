@@ -53,3 +53,7 @@ TLE 比對使用原始兩行直接初始化，避免另一次 OMM → TLE 的精
 - `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 scripts/verify-rpo-reference.py` reproduced both seed-7 final separations exactly in this environment: 59.52010643477721 m / 129.76978101130004 m, with zero endpoint delta against the frozen evidence. The 11 copied Python research tests also passed.
 - Script snapshots keep their original bytes and hashes. Frozen evidence and its browser copy are byte-identical. No runtime import depends on the older sibling research folder.
 - Contact/force sensing, image pose estimation, hardware joints/limits, latch sensing, uncertainty validation and flight performance remain unverified. The rig is authored kinematics on actual supplied meshes.
+
+## Headless rendering and frame timing
+
+The first GitHub Linux run passed clean installation, build, all numerical checks and Python research checks. Four browser flows timed out under software WebGL; the logs showed an active approach, screenshot timeout and a delayed asset-error assertion, rather than a numerical failure. The UI clock now accumulates up to 1 s of elapsed wall time per frame while preserving the 1/120 s integrator. Slow-cadence regression tests compare equal elapsed time and ensure pauses/long stalls stay bounded. CI allows 120 s per flow and 15 s for ordinary assertions; explicit model readiness/error waits remain 30 s. Retries remain disabled, with the same capture/export assertions.
