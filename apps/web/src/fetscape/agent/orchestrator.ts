@@ -15,6 +15,7 @@ import type {
 import { analyzeShellDensity } from '../tools/celestrak';
 import { estimateDeorbitLifetime, getComplianceStatus } from '../tools/deorbit';
 import { retrieveRegulations, generateComplianceChecklist } from '../tools/regulations';
+import type { CloseApproachSnapshot } from '../tools/close-approach';
 import { SafetyLinter } from '../safety/linter';
 
 export class AgentOrchestrator {
@@ -94,13 +95,27 @@ export class AgentOrchestrator {
       });
       steps.push(regStep);
 
-      // Step 4: Generate compliance checklist
+      // Step 4: Load close-approach snapshot (preloaded for demo)
+      const caStep = await this.executeStep({
+        thought: 'Loading close-approach screening results',
+        toolCalls: [
+          {
+            id: `tool-${Date.now()}-4`,
+            tool: 'load_close_approach_snapshot',
+            arguments: {},
+            timestamp: Date.now(),
+          },
+        ],
+      });
+      steps.push(caStep);
+
+      // Step 5: Generate compliance checklist
       const deorbitResult = deorbitStep.results[0]?.data as any;
       const checklistStep = await this.executeStep({
         thought: 'Generating compliance checklist',
         toolCalls: [
           {
-            id: `tool-${Date.now()}-4`,
+            id: `tool-${Date.now()}-5`,
             tool: 'generate_compliance_checklist',
             arguments: {
               hasNoPropulsion: profile.hasNoPropulsion ?? true,
@@ -188,6 +203,11 @@ export class AgentOrchestrator {
           data = generateComplianceChecklist(toolCall.arguments as any);
           break;
 
+        case 'load_close_approach_snapshot':
+          // Load preloaded demo snapshot
+          data = await this.loadCloseApproachSnapshot();
+          break;
+
         default:
           throw new Error(`Unknown tool: ${toolCall.tool}`);
       }
@@ -206,6 +226,13 @@ export class AgentOrchestrator {
         timestamp: Date.now(),
       };
     }
+  }
+
+  private async loadCloseApproachSnapshot(): Promise<CloseApproachSnapshot> {
+    // For demo/judge mode, load preloaded snapshot
+    // In full mode with API keys, this would call screenCloseApproaches()
+    const response = await fetch('/data/close-approach-demo-snapshot.json');
+    return await response.json();
   }
 
   private generateReport(trace: AgentTrace): string {
@@ -253,8 +280,33 @@ export class AgentOrchestrator {
       report += `${compliance.message}\n\n`;
     }
 
+    // Close approaches
+    const caData = steps[2]?.results[0]?.data as CloseApproachSnapshot;
+    if (caData) {
+      report += '## Close Approach Screening\n\n';
+      report += `**${caData.disclaimer}**\n\n`;
+      report += `- **Data Source**: ${caData.dataSource}\n`;
+      report += `- **Analysis Window**: ${new Date(caData.startUtc).toISOString()} + ${caData.hours} hours\n`;
+      report += `- **Geometry Threshold**: ${caData.thresholdKm} km\n`;
+      report += `- **Objects Screened**: ${caData.totalScreened}\n\n`;
+
+      if (caData.approaches.length > 0) {
+        report += '### Identified Events\n\n';
+        report += '| Object | TCA (UTC) | Miss Distance | Rel. Velocity | Note |\n';
+        report += '|--------|-----------|---------------|---------------|------|\n';
+        for (const approach of caData.approaches.slice(0, 10)) {
+          const tca = new Date(approach.tcaUtc).toISOString().slice(0, 16);
+          const flag = approach.isFiltered ? '⚠️' : '';
+          report += `| ${flag} ${approach.targetName} | ${tca} | ${approach.missDistanceKm.toFixed(1)} km | ${approach.relativeVelocityKmS.toFixed(2)} km/s | ${approach.note} |\n`;
+        }
+        report += '\n';
+      } else {
+        report += 'No close approaches within threshold detected in analysis window.\n\n';
+      }
+    }
+
     // Regulations
-    const regData = steps[2]?.results[0]?.data as any[];
+    const regData = steps[3]?.results[0]?.data as any[];
     if (regData) {
       report += '## Applicable Regulations\n\n';
       for (const reg of regData.slice(0, 5)) {
@@ -268,7 +320,7 @@ export class AgentOrchestrator {
     }
 
     // Checklist
-    const checklistData = steps[3]?.results[0]?.data as any[];
+    const checklistData = steps[4]?.results[0]?.data as any[];
     if (checklistData) {
       report += '## Compliance Checklist\n\n';
       for (const item of checklistData) {
