@@ -1,0 +1,24 @@
+/**
+ * Fetscape v1 MVP - Animations
+ */
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes progress {
+  0% {
+    width: 30%;
+  }
+  50% {
+    width: 70%;
+  }
+  100% {
+    width: 30%;
+  }
+}

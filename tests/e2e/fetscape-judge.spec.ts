@@ -69,9 +69,9 @@ test.describe('Fetscape Judge Mode', () => {
     await page.waitForTimeout(1000);
 
     // Should show verification status
-    await expect(
-      page.locator('text=verified, text=passed, text=success').first()
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=verified, text=passed, text=success').first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test('should display safety disclaimers', async ({ page }) => {
@@ -86,7 +86,7 @@ test.describe('Fetscape Judge Mode', () => {
 
     // Should show safety boundaries
     await expect(
-      page.locator('text=/geometric screening|not Pc|decision support/i').first()
+      page.locator('text=/geometric screening|not Pc|decision support/i').first(),
     ).toBeVisible({ timeout: 5000 });
   });
 
@@ -101,8 +101,8 @@ test.describe('Fetscape Judge Mode', () => {
     }
 
     // Should show approval card
-    await expect(
-      page.locator('text=/approval required|approve|export/i').first()
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=/approval required|approve|export/i').first()).toBeVisible({
+      timeout: 5000,
+    });
   });
 });
