@@ -101,11 +101,11 @@ function calculateMeanAltitude(meanMotion: number): number {
 
 function gpToSatrec(gp: GPObject): satellite.SatRec | null {
   try {
-    const satrec = satellite.twoline2satrec(
-      gp.OBJECT_NAME,
-      `1 ${gp.NORAD_CAT_ID}U ${gp.OBJECT_ID} ${gp.EPOCH} ${gp.MEAN_MOTION_DOT} ${gp.MEAN_MOTION_DDOT} ${gp.BSTAR} 0 ${gp.ELEMENT_SET_NO}`,
-      `2 ${gp.NORAD_CAT_ID} ${gp.INCLINATION} ${gp.RA_OF_ASC_NODE} ${gp.ECCENTRICITY} ${gp.ARG_OF_PERICENTER} ${gp.MEAN_ANOMALY} ${gp.MEAN_MOTION}${gp.REV_AT_EPOCH}`,
-    );
+    // satellite.js twoline2satrec expects two TLE lines
+    const line1 = `1 ${gp.NORAD_CAT_ID}U ${gp.OBJECT_ID} ${gp.EPOCH} ${gp.MEAN_MOTION_DOT} ${gp.MEAN_MOTION_DDOT} ${gp.BSTAR} 0 ${gp.ELEMENT_SET_NO}`;
+    const line2 = `2 ${gp.NORAD_CAT_ID} ${gp.INCLINATION} ${gp.RA_OF_ASC_NODE} ${gp.ECCENTRICITY} ${gp.ARG_OF_PERICENTER} ${gp.MEAN_ANOMALY} ${gp.MEAN_MOTION}${gp.REV_AT_EPOCH}`;
+
+    const satrec = satellite.twoline2satrec(line1, line2);
 
     if (satrec.error) {
       console.warn(`SGP4 init error for ${gp.OBJECT_NAME}:`, satrec.error);
@@ -134,48 +134,43 @@ function findTCA(
   for (let i = 0; i <= steps; i++) {
     const t = new Date(startDate.getTime() + i * cadenceSeconds * 1000);
 
-    const p1 = satellite.propagate(primary, t);
-    const p2 = satellite.propagate(secondary, t);
+    try {
+      const p1 = satellite.propagate(primary, t);
+      const p2 = satellite.propagate(secondary, t);
 
-    if (
-      p1.error ||
-      p2.error ||
-      !p1.position ||
-      !p2.position ||
-      typeof p1.position === 'boolean' ||
-      typeof p2.position === 'boolean' ||
-      !p1.velocity ||
-      !p2.velocity ||
-      typeof p1.velocity === 'boolean' ||
-      typeof p2.velocity === 'boolean'
-    ) {
+      if (!p1 || !p2) continue;
+      if (!p1.position || !p2.position) continue;
+      if (typeof p1.position === 'boolean' || typeof p2.position === 'boolean') continue;
+      if (!p1.velocity || !p2.velocity) continue;
+      if (typeof p1.velocity === 'boolean' || typeof p2.velocity === 'boolean') continue;
+
+      const r1 = p1.position;
+      const r2 = p2.position;
+      const v1 = p1.velocity;
+      const v2 = p2.velocity;
+
+      const dr = {
+        x: r2.x - r1.x,
+        y: r2.y - r1.y,
+        z: r2.z - r1.z,
+      };
+
+      const dv = {
+        x: v2.x - v1.x,
+        y: v2.y - v1.y,
+        z: v2.z - v1.z,
+      };
+
+      const distance = Math.sqrt(dr.x * dr.x + dr.y * dr.y + dr.z * dr.z);
+      const velocity = Math.sqrt(dv.x * dv.x + dv.y * dv.y + dv.z * dv.z);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        minTime = t;
+        minVelocity = velocity;
+      }
+    } catch (error) {
       continue;
-    }
-
-    const r1 = p1.position;
-    const r2 = p2.position;
-    const v1 = p1.velocity;
-    const v2 = p2.velocity;
-
-    const dr = {
-      x: r2.x - r1.x,
-      y: r2.y - r1.y,
-      z: r2.z - r1.z,
-    };
-
-    const dv = {
-      x: v2.x - v1.x,
-      y: v2.y - v1.y,
-      z: v2.z - v1.z,
-    };
-
-    const distance = Math.sqrt(dr.x * dr.x + dr.y * dr.y + dr.z * dr.z);
-    const velocity = Math.sqrt(dv.x * dv.x + dv.y * dv.y + dv.z * dv.z);
-
-    if (distance < minDistance) {
-      minDistance = distance;
-      minTime = t;
-      minVelocity = velocity;
     }
   }
 

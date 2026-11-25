@@ -165,12 +165,13 @@ export function generateMissionConcept(target: DebrisTarget): MissionConcept {
   // Estimate delta-V (very rough approximation)
   if (target.altitude >= 400 && target.altitude <= 600) {
     concept.transferDeltaV = Math.abs(target.altitude - 500) * 0.5; // Simplified
-    concept.planeChangeDeltaV = target.inclination * 10; // Very rough
+    concept.planeChangeDeltaV = Number(target.inclination) * 10; // Very rough
   }
 
   // Estimate duration
-  if (concept.transferDeltaV !== undefined) {
-    concept.estimatedDuration = Math.ceil(concept.transferDeltaV * 2); // days (placeholder)
+  if (typeof concept.transferDeltaV === 'number' && typeof concept.planeChangeDeltaV === 'number') {
+    const totalDeltaV = concept.transferDeltaV + concept.planeChangeDeltaV;
+    concept.estimatedDuration = Math.ceil(totalDeltaV * 2); // days (placeholder)
   }
 
   return concept;
@@ -204,7 +205,7 @@ export function formatDebrisRankingReport(
   for (let i = 0; i < Math.min(10, targets.length); i++) {
     const t = targets[i];
     const topCriteria = t.rankingCriteria
-      .sort((a, b) => b.value * b.weight - a.value * a.weight)
+      .sort((a, b) => Number(b.value) * Number(b.weight) - Number(a.value) * Number(a.weight))
       .slice(0, 2)
       .map((c) => c.criterion)
       .join(', ');
