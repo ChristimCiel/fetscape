@@ -1,108 +1,86 @@
 /**
- * Fetscape v1 MVP - Judge Mode E2E Test
- * Tests offline demo walkthrough in both languages
+ * Judge-mode E2E: offline walkthrough in EN and zh-TW.
+ * Local API serves the built app at / (not GitHub Pages /fetscape/ base).
  */
 
 import { test, expect } from '@playwright/test';
 
+async function openFetscape(page: import('@playwright/test').Page) {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Fetscape AI Workspace' }).click();
+  await expect(page.getByTestId('fetscape-app')).toBeVisible();
+  await expect(page.getByTestId('fetscape-brand')).toHaveText('Fetscape');
+  await expect(page.getByTestId('judge-mode-badge')).toBeVisible();
+}
+
 test.describe('Fetscape Judge Mode', () => {
-  test('should load and display Fetscape workspace', async ({ page }) => {
-    await page.goto('/');
-
-    // Click on Fetscape AI Workspace nav item
-    await page.click('text=Fetscape AI Workspace');
-
-    // Should show the app name
-    await expect(page.locator('text=Fetscape')).toBeVisible();
-
-    // Should show judge mode badge
-    await expect(page.locator('text=Judge Mode')).toBeVisible();
-
-    // Should show language toggle
-    await expect(page.locator('button:has-text("中文")')).toBeVisible();
+  test('loads workspace with judge badge and language toggle', async ({ page }) => {
+    await openFetscape(page);
+    await expect(page.getByTestId('language-toggle')).toHaveText('中文');
+    await expect(page.getByTestId('judge-walkthrough')).toBeVisible();
+    await expect(page.getByTestId('walkthrough-title')).toContainText('Welcome to Fetscape');
   });
 
-  test('should complete walkthrough in English', async ({ page }) => {
-    await page.goto('/');
-    await page.click('text=Fetscape AI Workspace');
+  test('completes walkthrough in English and shows verified pack + approval', async ({ page }) => {
+    await openFetscape(page);
 
-    // Should start at step 1
-    await expect(page.locator('text=Step 1')).toBeVisible();
-    await expect(page.locator('text=Welcome to Fetscape')).toBeVisible();
+    // Step 0 → 1
+    await page.getByTestId('walkthrough-next').click();
+    await expect(page.getByTestId('walkthrough-title')).toContainText('Define Mission Profile');
 
-    // Click through walkthrough
-    for (let step = 1; step <= 7; step++) {
-      await expect(page.locator(`text=Step ${step}`)).toBeVisible();
-
-      // Click action button (various labels)
-      const nextButton = page.locator('button').filter({
-        hasText: /Start Analysis|Analyze|Next|Approve Export|Finish/,
-      });
-      await nextButton.first().click();
-
-      // Wait a bit for state update
-      await page.waitForTimeout(500);
-    }
-  });
-
-  test('should toggle to Traditional Chinese', async ({ page }) => {
-    await page.goto('/');
-    await page.click('text=Fetscape AI Workspace');
-
-    // Click language toggle
-    await page.click('button:has-text("中文")');
-
-    // Should show Chinese text
-    await expect(page.locator('text=歡迎使用 Fetscape')).toBeVisible();
-    await expect(page.locator('text=評審模式')).toBeVisible();
-  });
-
-  test('should show analysis results after walkthrough', async ({ page }) => {
-    await page.goto('/');
-    await page.click('text=Fetscape AI Workspace');
-
-    // Skip to analysis step (step 2)
-    await page.click('button:has-text("Start Analysis")');
-    await page.click('button');
-
-    // Wait for analysis
-    await page.waitForTimeout(1000);
-
-    // Should show verification status
-    await expect(page.locator('text=verified, text=passed, text=success').first()).toBeVisible({
-      timeout: 10000,
+    // Step 1 → 2 triggers offline analysis (deterministic replay — no network)
+    await page.getByTestId('walkthrough-next').click();
+    await expect(page.getByTestId('verification-status')).toHaveText('Verified', {
+      timeout: 30000,
     });
+    await expect(page.getByTestId('evidence-pack')).toContainText('GEOMETRIC SCREENING ONLY');
+    await expect(page.getByTestId('evidence-pack')).toContainText('Not probability of collision');
+    await expect(page.getByTestId('approval-card')).toBeVisible();
+
+    // Continue through remaining steps
+    for (let i = 0; i < 4; i++) {
+      await page.getByTestId('walkthrough-next').click();
+    }
+    await expect(page.getByTestId('walkthrough-title')).toContainText('Demo Complete');
   });
 
-  test('should display safety disclaimers', async ({ page }) => {
-    await page.goto('/');
-    await page.click('text=Fetscape AI Workspace');
-
-    // Go through walkthrough to show results
-    for (let i = 0; i < 3; i++) {
-      await page.locator('button').first().click();
-      await page.waitForTimeout(300);
-    }
-
-    // Should show safety boundaries
-    await expect(
-      page.locator('text=/geometric screening|not Pc|decision support/i').first(),
-    ).toBeVisible({ timeout: 5000 });
+  test('toggles Traditional Chinese UI', async ({ page }) => {
+    await openFetscape(page);
+    await page.getByTestId('language-toggle').click();
+    await expect(page.getByTestId('judge-mode-badge')).toHaveText('評審模式');
+    await expect(page.getByTestId('walkthrough-title')).toContainText('歡迎使用 Fetscape');
+    await expect(page.getByTestId('language-toggle')).toHaveText('English');
   });
 
-  test('should show approval card', async ({ page }) => {
-    await page.goto('/');
-    await page.click('text=Fetscape AI Workspace');
+  test('shows safety disclaimers without Pc / maneuver / commanding claims', async ({ page }) => {
+    await openFetscape(page);
+    const safety = page.getByTestId('safety-disclaimers');
+    await expect(safety).toContainText('Geometric screening only');
+    await expect(safety).toContainText('Decision support');
+    await expect(safety).not.toContainText(/collision risk/i);
+    await expect(safety).not.toContainText(/recommend(ed)? burn/i);
+  });
 
-    // Navigate to approval step
-    for (let i = 0; i < 5; i++) {
-      await page.locator('button').first().click();
-      await page.waitForTimeout(300);
-    }
+  test('debris planner tab is labeled as concept study', async ({ page }) => {
+    await openFetscape(page);
+    await page.getByTestId('tab-debris').click();
+    await expect(page.getByTestId('debris-planner')).toBeVisible();
+    await expect(page.getByTestId('concept-study-banner')).toContainText('Concept study tool');
+    await page.getByTestId('rank-debris').click();
+    await expect(page.getByTestId('debris-report')).toContainText('Debris Target Ranking');
+    await expect(page.getByTestId('debris-report')).toContainText('concept study');
+  });
 
-    // Should show approval card
-    await expect(page.locator('text=/approval required|approve|export/i').first()).toBeVisible({
-      timeout: 5000,
-    });
+  test('approval card requires explicit approve before export', async ({ page }) => {
+    await openFetscape(page);
+    await page.getByTestId('walkthrough-next').click();
+    await page.getByTestId('walkthrough-next').click();
+    await expect(page.getByTestId('approval-card')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('approve-export')).toBeVisible();
+    await expect(page.getByTestId('reject-export')).toBeVisible();
+    const download = page.waitForEvent('download');
+    await page.getByTestId('approve-export').click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/fetscape-analysis-/);
   });
 });

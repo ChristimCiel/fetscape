@@ -1,75 +1,153 @@
 /**
- * Fetscape v1 MVP - Main Application Component
- * AI-Native Space Operations Workspace
+ * Fetscape v1 MVP — AI-native space operations workspace (judge + full modes)
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { Language, MissionProfile, AgentTrace, ApprovalRequest } from './types';
 import { AgentOrchestrator } from './agent/orchestrator';
-import { Verifier } from './agent/verifier';
 import { t } from './i18n/translations';
 import { DEMO_MISSIONS, DEMO_TRACE, WALKTHROUGH_STEPS } from './demo-data';
+import {
+  DEFAULT_CRITERIA,
+  formatDebrisRankingReport,
+  generateMissionConcept,
+  rankDebrisTargets,
+} from './tools/debris-ranking';
+import type { GPObject } from './tools/celestrak';
+import './styles.css';
 
 interface FetscapeAppProps {
   mode?: 'full' | 'judge';
   apiKey?: string;
 }
 
+const DEMO_DEBRIS_CATALOG: GPObject[] = [
+  {
+    OBJECT_NAME: 'COSMOS 2251 DEB',
+    OBJECT_ID: '1993-036ABC',
+    EPOCH: '2026-11-10T00:00:00.000Z',
+    MEAN_MOTION: 15.2,
+    ECCENTRICITY: 0.002,
+    INCLINATION: 74.0,
+    RA_OF_ASC_NODE: 120,
+    ARG_OF_PERICENTER: 10,
+    MEAN_ANOMALY: 20,
+    EPHEMERIS_TYPE: 0,
+    CLASSIFICATION_TYPE: 'U',
+    NORAD_CAT_ID: 34454,
+    ELEMENT_SET_NO: 1,
+    REV_AT_EPOCH: 1,
+    BSTAR: 1e-4,
+    MEAN_MOTION_DOT: 0,
+    MEAN_MOTION_DDOT: 0,
+  },
+  {
+    OBJECT_NAME: 'SL-16 R/B',
+    OBJECT_ID: '1993-016B',
+    EPOCH: '2026-11-10T00:00:00.000Z',
+    MEAN_MOTION: 15.05,
+    ECCENTRICITY: 0.001,
+    INCLINATION: 71.0,
+    RA_OF_ASC_NODE: 80,
+    ARG_OF_PERICENTER: 30,
+    MEAN_ANOMALY: 40,
+    EPHEMERIS_TYPE: 0,
+    CLASSIFICATION_TYPE: 'U',
+    NORAD_CAT_ID: 22566,
+    ELEMENT_SET_NO: 1,
+    REV_AT_EPOCH: 1,
+    BSTAR: 5e-5,
+    MEAN_MOTION_DOT: 0,
+    MEAN_MOTION_DDOT: 0,
+  },
+  {
+    OBJECT_NAME: 'IRIDIUM 33 DEB',
+    OBJECT_ID: '1997-051C',
+    EPOCH: '2026-11-10T00:00:00.000Z',
+    MEAN_MOTION: 14.95,
+    ECCENTRICITY: 0.003,
+    INCLINATION: 86.4,
+    RA_OF_ASC_NODE: 200,
+    ARG_OF_PERICENTER: 50,
+    MEAN_ANOMALY: 60,
+    EPHEMERIS_TYPE: 0,
+    CLASSIFICATION_TYPE: 'U',
+    NORAD_CAT_ID: 33757,
+    ELEMENT_SET_NO: 1,
+    REV_AT_EPOCH: 1,
+    BSTAR: 2e-4,
+    MEAN_MOTION_DOT: 0,
+    MEAN_MOTION_DDOT: 0,
+  },
+];
+
 export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps) {
   const [language, setLanguage] = useState<Language>('en');
   const [currentTab, setCurrentTab] = useState<'mission' | 'debris'>('mission');
   const [judgeStep, setJudgeStep] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
+  const [progressLabel, setProgressLabel] = useState('');
   const [trace, setTrace] = useState<AgentTrace | null>(mode === 'judge' ? DEMO_TRACE : null);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
-  const [missionInput, setMissionInput] = useState('');
-
-  const orchestrator = new AgentOrchestrator({
-    language,
-    provider: apiKey ? 'anthropic' : 'deterministic',
-    apiKey,
-    maxTokens: 10000,
-  });
-
-  const verifier = new Verifier();
+  const [debrisReport, setDebrisReport] = useState('');
 
   const isJudgeMode = mode === 'judge';
   const currentWalkthroughStep = WALKTHROUGH_STEPS[judgeStep];
 
   async function handleAnalyzeMission(profile: MissionProfile) {
     setAnalyzing(true);
+    setProgressLabel(language === 'en' ? 'Orchestrator planning steps…' : '編排器規劃步驟中…');
     try {
+      const orchestrator = new AgentOrchestrator({
+        language,
+        provider: apiKey ? 'anthropic' : 'deterministic',
+        apiKey,
+        maxTokens: 10000,
+      });
+      setProgressLabel(
+        language === 'en' ? 'Running deterministic tools (replay)…' : '執行確定性工具（重播）…',
+      );
       const result = await orchestrator.analyzeMissionReadiness(profile);
+      setProgressLabel(language === 'en' ? 'Verifier checking outputs…' : '驗證器檢查輸出…');
       setTrace(result);
 
-      // Create approval request for export
       if (result.verificationStatus === 'verified') {
-        const approval: ApprovalRequest = {
-          id: `approval-${Date.now()}`,
-          type: 'export',
-          title: t('approval.exportReport', language),
-          description: t('approval.description', language),
-          payload: result,
-          status: 'pending',
-        };
-        setPendingApprovals([approval]);
+        setPendingApprovals([
+          {
+            id: `approval-${Date.now()}`,
+            type: 'export',
+            title: t('approval.exportReport', language),
+            description: t('approval.description', language),
+            payload: result,
+            status: 'pending',
+          },
+        ]);
       }
     } catch (error) {
       console.error('Analysis error:', error);
     } finally {
       setAnalyzing(false);
+      setProgressLabel('');
     }
   }
 
-  function handleJudgeNext() {
-    if (judgeStep < WALKTHROUGH_STEPS.length - 1) {
-      setJudgeStep(judgeStep + 1);
+  function runDebrisRanking() {
+    const ranked = rankDebrisTargets(DEMO_DEBRIS_CATALOG, DEFAULT_CRITERIA);
+    setDebrisReport(formatDebrisRankingReport(ranked, DEFAULT_CRITERIA, language));
+    if (ranked[0]) generateMissionConcept(ranked[0]);
+  }
 
-      // Trigger actions based on step
-      if (judgeStep === 1) {
-        // Step 2: Start analysis
-        handleAnalyzeMission(DEMO_MISSIONS[0]);
-      }
+  async function handleJudgeNext() {
+    if (judgeStep >= WALKTHROUGH_STEPS.length - 1) return;
+    const next = judgeStep + 1;
+    setJudgeStep(next);
+    // After "mission input" step, run offline analysis so approval appears.
+    if (judgeStep === 1) {
+      await handleAnalyzeMission(DEMO_MISSIONS[0]);
+    }
+    if (next === 3) {
+      setCurrentTab('debris');
+      runDebrisRanking();
     }
   }
 
@@ -77,229 +155,121 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
     setPendingApprovals((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status: approved ? 'approved' : 'rejected' } : a)),
     );
-
-    if (approved) {
-      // Handle export
-      const approval = pendingApprovals.find((a) => a.id === id);
-      if (approval) {
-        const dataStr = JSON.stringify(approval.payload, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `fetscape-analysis-${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-    }
+    if (!approved) return;
+    const approval = pendingApprovals.find((a) => a.id === id);
+    if (!approval) return;
+    const blob = new Blob([JSON.stringify(approval.payload, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fetscape-analysis-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
-    <div className="fetscape-app" style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <header
-        style={{ marginBottom: '2rem', borderBottom: '2px solid #333', paddingBottom: '1rem' }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '2.5rem', fontWeight: 'bold' }}>
-              {t('appName', language)}
-            </h1>
-            <p style={{ margin: '0.5rem 0 0', color: '#666', fontSize: '1.1rem' }}>
-              {t('tagline', language)}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            {isJudgeMode && (
-              <div
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: '#ff6b35',
-                  color: 'white',
-                  borderRadius: '4px',
-                  fontWeight: 'bold',
-                }}
-              >
-                {t('judgeMode', language)}
-              </div>
-            )}
-            <button
-              onClick={() => setLanguage(language === 'en' ? 'zh-TW' : 'en')}
-              style={{
-                padding: '0.5rem 1rem',
-                border: '1px solid #333',
-                background: 'white',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              {language === 'en' ? '中文' : 'English'}
-            </button>
-          </div>
+    <div className="fetscape-app" data-testid="fetscape-app">
+      <header className="fetscape-header">
+        <div>
+          <h1 data-testid="fetscape-brand">{t('appName', language)}</h1>
+          <p className="fetscape-tagline">{t('tagline', language)}</p>
+        </div>
+        <div className="fetscape-header-actions">
+          {isJudgeMode ? (
+            <div className="fetscape-badge" data-testid="judge-mode-badge">
+              {t('judgeMode', language)}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            data-testid="language-toggle"
+            className="fetscape-lang"
+            onClick={() => setLanguage(language === 'en' ? 'zh-TW' : 'en')}
+          >
+            {language === 'en' ? '中文' : 'English'}
+          </button>
         </div>
       </header>
 
-      {/* Judge Mode Walkthrough */}
-      {isJudgeMode && (
-        <div
-          style={{
-            background: '#f5f5f5',
-            padding: '2rem',
-            borderRadius: '8px',
-            marginBottom: '2rem',
-            border: '2px solid #ff6b35',
-          }}
-        >
-          <div style={{ marginBottom: '1.5rem' }}>
-            <div
-              style={{
-                color: '#ff6b35',
-                fontSize: '0.9rem',
-                fontWeight: 'bold',
-                marginBottom: '0.5rem',
-              }}
-            >
-              {t('judge.title', language)} - Step {judgeStep + 1} / {WALKTHROUGH_STEPS.length}
-            </div>
-            <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem' }}>
-              {currentWalkthroughStep.title[language]}
-            </h2>
-            <p style={{ margin: 0, color: '#555', lineHeight: 1.6 }}>
-              {currentWalkthroughStep.description[language]}
-            </p>
+      {isJudgeMode ? (
+        <section className="fetscape-walkthrough" data-testid="judge-walkthrough">
+          <div className="fetscape-walkthrough-meta">
+            {t('judge.title', language)} — Step {judgeStep + 1} / {WALKTHROUGH_STEPS.length}
           </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            {judgeStep > 0 && (
+          <h2 data-testid="walkthrough-title">{currentWalkthroughStep.title[language]}</h2>
+          <p data-testid="walkthrough-description">
+            {currentWalkthroughStep.description[language]}
+          </p>
+          <div className="fetscape-walkthrough-actions">
+            {judgeStep > 0 ? (
               <button
+                type="button"
+                data-testid="walkthrough-prev"
                 onClick={() => setJudgeStep(Math.max(0, judgeStep - 1))}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  border: '1px solid #333',
-                  background: 'white',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                }}
               >
                 {t('judge.prevStep', language)}
               </button>
-            )}
+            ) : null}
             <button
-              onClick={handleJudgeNext}
-              style={{
-                padding: '0.75rem 1.5rem',
-                border: 'none',
-                background: '#ff6b35',
-                color: 'white',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-              }}
+              type="button"
+              data-testid="walkthrough-next"
+              className="fetscape-primary"
+              onClick={() => void handleJudgeNext()}
             >
               {judgeStep === WALKTHROUGH_STEPS.length - 1
                 ? t('judge.finish', language)
                 : currentWalkthroughStep.action[language]}
             </button>
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* Main Content */}
-      {!isJudgeMode && (
-        <div style={{ marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #ddd' }}>
-            <button
-              onClick={() => setCurrentTab('mission')}
-              style={{
-                padding: '1rem 2rem',
-                border: 'none',
-                background: currentTab === 'mission' ? '#333' : 'transparent',
-                color: currentTab === 'mission' ? 'white' : '#333',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                borderTopLeftRadius: '4px',
-                borderTopRightRadius: '4px',
-              }}
-            >
-              {t('lanes.missionReadiness', language)}
-            </button>
-            <button
-              onClick={() => setCurrentTab('debris')}
-              style={{
-                padding: '1rem 2rem',
-                border: 'none',
-                background: currentTab === 'debris' ? '#333' : 'transparent',
-                color: currentTab === 'debris' ? 'white' : '#333',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                borderTopLeftRadius: '4px',
-                borderTopRightRadius: '4px',
-              }}
-            >
-              {t('lanes.debrisRemoval', language)}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Analysis Results */}
-      {trace && (
-        <div
-          style={{
-            background: 'white',
-            border: '1px solid #ddd',
-            borderRadius: '8px',
-            padding: '2rem',
-            marginBottom: '2rem',
+      <div className="fetscape-tabs" role="tablist" aria-label="Fetscape lanes">
+        <button
+          type="button"
+          role="tab"
+          data-testid="tab-mission"
+          aria-selected={currentTab === 'mission'}
+          className={currentTab === 'mission' ? 'active' : ''}
+          onClick={() => setCurrentTab('mission')}
+        >
+          {t('lanes.missionReadiness', language)}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-testid="tab-debris"
+          aria-selected={currentTab === 'debris'}
+          className={currentTab === 'debris' ? 'active' : ''}
+          onClick={() => {
+            setCurrentTab('debris');
+            if (!debrisReport) runDebrisRanking();
           }}
         >
-          <div
-            style={{
-              marginBottom: '1.5rem',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'start',
-            }}
-          >
+          {t('lanes.debrisRemoval', language)}
+        </button>
+      </div>
+
+      {currentTab === 'mission' && trace ? (
+        <section className="fetscape-panel" data-testid="analysis-results">
+          <div className="fetscape-panel-head">
             <div>
-              <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem' }}>
-                {t('missionReadiness.title', language)}
-              </h2>
-              <p style={{ margin: 0, color: '#666' }}>{trace.task}</p>
+              <h2>{t('missionReadiness.title', language)}</h2>
+              <p>{trace.task}</p>
             </div>
             <div
-              style={{
-                padding: '0.5rem 1rem',
-                background:
-                  trace.verificationStatus === 'verified'
-                    ? '#4caf50'
-                    : trace.verificationStatus === 'blocked'
-                      ? '#f44336'
-                      : '#ff9800',
-                color: 'white',
-                borderRadius: '4px',
-                fontSize: '0.9rem',
-                fontWeight: 'bold',
-              }}
+              className={`fetscape-status ${trace.verificationStatus}`}
+              data-testid="verification-status"
             >
               {t(`common.${trace.verificationStatus}`, language)}
             </div>
           </div>
 
-          {/* Safety Disclaimers */}
-          <div
-            style={{
-              background: '#fff3cd',
-              border: '1px solid #ffc107',
-              borderRadius: '4px',
-              padding: '1rem',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <strong style={{ display: 'block', marginBottom: '0.5rem' }}>
-              ⚠️ {t('safety.title', language)}
-            </strong>
-            <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem', lineHeight: 1.6 }}>
+          <div className="fetscape-safety" data-testid="safety-disclaimers">
+            <strong>⚠ {t('safety.title', language)}</strong>
+            <ul>
               <li>{t('missionReadiness.disclaimers.geometricOnly', language)}</li>
               <li>{t('missionReadiness.disclaimers.decisionSupport', language)}</li>
               <li>{t('missionReadiness.disclaimers.noManeuvers', language)}</li>
@@ -307,155 +277,94 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
             </ul>
           </div>
 
-          {/* Analysis Steps */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ margin: '0 0 1rem', fontSize: '1.2rem' }}>
-              {t('common.verification', language)} Steps
-            </h3>
-            {trace.steps.map((step, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: '#f9f9f9',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '4px',
-                  padding: '1rem',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                <div style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: '#555' }}>
-                  Step {idx + 1}: {step.thought}
-                </div>
-                {step.results.map((result, ridx) => (
-                  <div key={ridx} style={{ fontSize: '0.9rem', color: '#666' }}>
-                    {result.success ? (
-                      <span style={{ color: '#4caf50' }}>✓ Success</span>
-                    ) : (
-                      <span style={{ color: '#f44336' }}>✗ {result.error}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {/* Final Report */}
-          {trace.finalResponse && (
-            <div
-              style={{
-                background: 'white',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                padding: '1.5rem',
-              }}
-            >
-              <h3 style={{ margin: '0 0 1rem', fontSize: '1.2rem' }}>
-                {t('missionReadiness.sections.evidencePack', language)}
-              </h3>
-              <pre
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'system-ui',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.6,
-                  margin: 0,
-                }}
-              >
-                {trace.finalResponse}
-              </pre>
-            </div>
+          {trace.finalResponse ? (
+            <pre className="fetscape-report" data-testid="evidence-pack">
+              {trace.finalResponse}
+            </pre>
+          ) : (
+            <p className="fetscape-muted">
+              {language === 'en'
+                ? 'Preloaded judge trace. Continue the walkthrough to generate a verified evidence pack.'
+                : '預載評審軌跡。繼續導覽以產生已驗證的證據包。'}
+            </p>
           )}
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* Approval Cards */}
-      {pendingApprovals.filter((a) => a.status === 'pending').length > 0 && (
-        <div style={{ marginBottom: '2rem' }}>
-          <h2 style={{ margin: '0 0 1rem', fontSize: '1.5rem' }}>
-            {t('approval.title', language)}
-          </h2>
+      {currentTab === 'debris' ? (
+        <section className="fetscape-panel" data-testid="debris-planner">
+          <div className="fetscape-concept-banner" data-testid="concept-study-banner">
+            {t('debrisRemoval.disclaimers.conceptOnly', language)}
+          </div>
+          <h2>{t('debrisRemoval.title', language)}</h2>
+          <p>{t('debrisRemoval.subtitle', language)}</p>
+          <button
+            type="button"
+            className="fetscape-primary"
+            data-testid="rank-debris"
+            onClick={runDebrisRanking}
+          >
+            {t('debrisRemoval.selectTarget', language)}
+          </button>
+          {debrisReport ? (
+            <pre className="fetscape-report" data-testid="debris-report">
+              {debrisReport}
+            </pre>
+          ) : null}
+          <p className="fetscape-muted">
+            {language === 'en'
+              ? 'Open Capture rehearsal from the sidebar to explore a near-field rendezvous concept simulation. Planning context and local synthetic state stay separate.'
+              : '從側邊欄開啟捕獲演練以探索近場交會概念模擬。規劃脈絡與本地合成狀態保持分離。'}
+          </p>
+        </section>
+      ) : null}
+
+      {pendingApprovals.some((a) => a.status === 'pending') ? (
+        <section className="fetscape-approval" data-testid="approval-card">
+          <div className="fetscape-approval-banner">
+            <strong>{t('approval.title', language)}</strong>
+            <span>{t('approval.description', language)}</span>
+          </div>
           {pendingApprovals
             .filter((a) => a.status === 'pending')
             .map((approval) => (
-              <div
-                key={approval.id}
-                style={{
-                  background: 'white',
-                  border: '2px solid #ff9800',
-                  borderRadius: '8px',
-                  padding: '1.5rem',
-                  marginBottom: '1rem',
-                }}
-              >
-                <div style={{ marginBottom: '1rem' }}>
-                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.2rem' }}>{approval.title}</h3>
-                  <p style={{ margin: 0, color: '#666' }}>{approval.description}</p>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
+              <div key={approval.id} className="fetscape-approval-body">
+                <h3>{approval.title}</h3>
+                <p>{approval.description}</p>
+                <div className="fetscape-approval-actions">
                   <button
+                    type="button"
+                    data-testid="approve-export"
+                    className="fetscape-approve"
                     onClick={() => handleApproval(approval.id, true)}
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      border: 'none',
-                      background: '#4caf50',
-                      color: 'white',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                    }}
                   >
                     {t('common.approve', language)}
                   </button>
                   <button
+                    type="button"
+                    data-testid="reject-export"
                     onClick={() => handleApproval(approval.id, false)}
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      border: '1px solid #333',
-                      background: 'white',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                    }}
                   >
                     {t('common.reject', language)}
                   </button>
                 </div>
               </div>
             ))}
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* Loading State */}
-      {analyzing && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              background: 'white',
-              padding: '2rem',
-              borderRadius: '8px',
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>
-              {t('missionReadiness.analyzing', language)}
+      {analyzing ? (
+        <div className="fetscape-overlay" data-testid="analysis-progress" role="status">
+          <div className="fetscape-overlay-card">
+            <div className="fetscape-spinner" aria-hidden="true" />
+            <div>{t('missionReadiness.analyzing', language)}</div>
+            <p>{progressLabel || t('common.loading', language)}</p>
+            <div className="fetscape-progress-track">
+              <div className="fetscape-progress-bar" />
             </div>
-            <div style={{ color: '#666' }}>{t('common.loading', language)}</div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

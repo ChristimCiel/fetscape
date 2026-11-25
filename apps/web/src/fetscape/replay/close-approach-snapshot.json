@@ -32,8 +32,9 @@
       "note": "Geometric screening only. Not Pc."
     }
   ],
-  "dataSource": "Preloaded demo snapshot for judge mode",
+  "dataSource": "Preloaded demo snapshot for judge mode / CI replay",
   "acquiredAt": "2026-11-25T19:00:00.000Z",
   "totalScreened": 3,
+  "excludedDocked": ["ISS (ZARYA)", "POISK", "PROGRESS-MS"],
   "disclaimer": "GEOMETRIC SCREENING ONLY. Not probability of collision (Pc). Requires covariance data and licensed SSA provider for operational conjunction assessment."
 }

@@ -81,19 +81,33 @@ const REQUIRED_DISCLAIMERS = {
   ],
 };
 
+const ALLOWED_NEGATIONS = /\b(not|no|never|without|unavailable)\b.{0,40}$/i;
+
 export class SafetyLinter {
   lint(text: string): SafetyViolation[] {
     const violations: SafetyViolation[] = [];
 
     for (const [category, patterns] of Object.entries(PROHIBITED_TERMS)) {
       for (const pattern of patterns) {
-        const matches = text.match(pattern);
-        if (matches) {
-          const type = this.categorizeViolation(category);
+        const global = new RegExp(
+          pattern.source,
+          pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`,
+        );
+        let match: RegExpExecArray | null;
+        while ((match = global.exec(text)) !== null) {
+          const before = text.slice(Math.max(0, match.index - 48), match.index);
+          // Allow disclaimer wording: "Not probability of collision", "no Pc value", etc.
+          if (ALLOWED_NEGATIONS.test(before) || /geometric\s+screening\s+only/i.test(before)) {
+            continue;
+          }
+          // Required disclaimer phrases themselves are not violations.
+          if (/^not\s+probability\s+of\s+collision$/i.test(match[0])) continue;
+          if (/^not\s+Pc$/i.test(match[0])) continue;
+
           violations.push({
-            type,
-            content: matches[0],
-            context: this.extractContext(text, matches.index ?? 0, 100),
+            type: this.categorizeViolation(category),
+            content: match[0],
+            context: this.extractContext(text, match.index, 100),
             severity: 'error',
           });
         }

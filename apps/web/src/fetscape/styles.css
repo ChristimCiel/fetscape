@@ -1,24 +1,280 @@
-/**
- * Fetscape v1 MVP - Animations
- */
+.fetscape-app {
+  padding: 1.5rem 2rem 3rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  color: #1a1a1a;
+}
 
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
+.fetscape-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  border-bottom: 2px solid #222;
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.fetscape-header h1 {
+  margin: 0;
+  font-size: 2.25rem;
+  letter-spacing: -0.02em;
+}
+
+.fetscape-tagline {
+  margin: 0.35rem 0 0;
+  color: #555;
+}
+
+.fetscape-header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.fetscape-badge {
+  padding: 0.4rem 0.85rem;
+  background: #c2410c;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.fetscape-lang,
+.fetscape-walkthrough button,
+.fetscape-tabs button,
+.fetscape-panel button,
+.fetscape-approval button {
+  cursor: pointer;
+  font: inherit;
+}
+
+.fetscape-lang {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #333;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.fetscape-walkthrough {
+  background: linear-gradient(180deg, #fff7ed, #ffedd5);
+  border: 2px solid #c2410c;
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.fetscape-walkthrough-meta {
+  color: #c2410c;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.fetscape-walkthrough h2 {
+  margin: 0 0 0.5rem;
+}
+
+.fetscape-walkthrough-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.fetscape-primary,
+.fetscape-approve {
+  border: none;
+  background: #c2410c;
+  color: #fff;
+  font-weight: 700;
+  padding: 0.7rem 1.25rem;
+  border-radius: 6px;
+}
+
+.fetscape-approve {
+  background: #15803d;
+}
+
+.fetscape-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.fetscape-tabs button {
+  border: none;
+  background: transparent;
+  padding: 0.85rem 1.25rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.fetscape-tabs button.active {
+  background: #222;
+  color: #fff;
+  border-radius: 6px 6px 0 0;
+}
+
+.fetscape-panel {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.fetscape-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.fetscape-panel-head h2 {
+  margin: 0 0 0.35rem;
+}
+
+.fetscape-status {
+  padding: 0.45rem 0.85rem;
+  border-radius: 4px;
+  color: #fff;
+  font-weight: 700;
+  align-self: flex-start;
+}
+
+.fetscape-status.verified {
+  background: #15803d;
+}
+
+.fetscape-status.blocked {
+  background: #b91c1c;
+}
+
+.fetscape-status.pending {
+  background: #c2410c;
+}
+
+.fetscape-safety {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.fetscape-report {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.fetscape-muted {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.fetscape-concept-banner {
+  background: #eff6ff;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.fetscape-approval {
+  border: 3px solid #ea580c;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(234, 88, 12, 0.18);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.fetscape-approval-banner {
+  background: #ffedd5;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fetscape-approval-body {
+  padding: 1.25rem;
+}
+
+.fetscape-approval-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.fetscape-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fetscape-overlay-card {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 280px;
+  max-width: 420px;
+}
+
+.fetscape-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #eee;
+  border-top-color: #c2410c;
+  border-radius: 50%;
+  margin: 0 auto 1rem;
+  animation: fetscape-spin 0.9s linear infinite;
+}
+
+.fetscape-progress-track {
+  height: 4px;
+  background: #eee;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.fetscape-progress-bar {
+  height: 100%;
+  width: 55%;
+  background: linear-gradient(90deg, #c2410c, #f59e0b);
+  animation: fetscape-progress 1.6s ease-in-out infinite;
+}
+
+@keyframes fetscape-spin {
+  to {
     transform: rotate(360deg);
   }
 }
 
-@keyframes progress {
-  0% {
-    width: 30%;
+@keyframes fetscape-progress {
+  0%,
+  100% {
+    width: 28%;
+    margin-left: 0;
   }
   50% {
     width: 70%;
-  }
-  100% {
-    width: 30%;
+    margin-left: 15%;
   }
 }
