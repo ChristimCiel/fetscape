@@ -96,13 +96,19 @@ export class SafetyLinter {
         let match: RegExpExecArray | null;
         while ((match = global.exec(text)) !== null) {
           const before = text.slice(Math.max(0, match.index - 48), match.index);
-          // Allow disclaimer wording: "Not probability of collision", "no Pc value", etc.
-          if (ALLOWED_NEGATIONS.test(before) || /geometric\s+screening\s+only/i.test(before)) {
+          // Allow disclaimer wording: "Not probability of collision", "非碰撞機率", etc.
+          if (
+            ALLOWED_NEGATIONS.test(before) ||
+            /[非不無]\s*$/.test(before) ||
+            /geometric\s+screening\s+only/i.test(before) ||
+            /僅幾何/.test(before)
+          ) {
             continue;
           }
           // Required disclaimer phrases themselves are not violations.
           if (/^not\s+probability\s+of\s+collision$/i.test(match[0])) continue;
           if (/^not\s+Pc$/i.test(match[0])) continue;
+          if (/^非碰撞機率$/.test(match[0])) continue;
 
           violations.push({
             type: this.categorizeViolation(category),

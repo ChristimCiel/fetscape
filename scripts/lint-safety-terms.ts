@@ -16,8 +16,13 @@ function scanFile(filePath: string): void {
     return;
   }
 
-  // Skip test files and this linter itself
-  if (filePath.includes('.test.') || filePath.includes('lint-safety-terms')) {
+  // Skip test files, the term dictionary, and this scanner itself
+  if (
+    filePath.includes('.test.') ||
+    filePath.includes('lint-safety-terms') ||
+    filePath.endsWith('/safety/linter.ts') ||
+    filePath.includes('/docs/')
+  ) {
     return;
   }
 

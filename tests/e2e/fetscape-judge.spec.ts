@@ -1,5 +1,5 @@
 /**
- * Judge-mode E2E: offline walkthrough in EN and zh-TW.
+ * Judge-mode E2E: offline walkthrough, ADR ranking, live-mode opt-in UI (replay default).
  * Local API serves the built app at / (not GitHub Pages /fetscape/ base).
  */
 
@@ -24,11 +24,9 @@ test.describe('Fetscape Judge Mode', () => {
   test('completes walkthrough in English and shows verified pack + approval', async ({ page }) => {
     await openFetscape(page);
 
-    // Step 0 → 1
     await page.getByTestId('walkthrough-next').click();
     await expect(page.getByTestId('walkthrough-title')).toContainText('Define Mission Profile');
 
-    // Step 1 → 2 triggers offline analysis (deterministic replay — no network)
     await page.getByTestId('walkthrough-next').click();
     await expect(page.getByTestId('verification-status')).toHaveText('Verified', {
       timeout: 30000,
@@ -37,7 +35,6 @@ test.describe('Fetscape Judge Mode', () => {
     await expect(page.getByTestId('evidence-pack')).toContainText('Not probability of collision');
     await expect(page.getByTestId('approval-card')).toBeVisible();
 
-    // Continue through remaining steps
     for (let i = 0; i < 4; i++) {
       await page.getByTestId('walkthrough-next').click();
     }
@@ -61,14 +58,36 @@ test.describe('Fetscape Judge Mode', () => {
     await expect(safety).not.toContainText(/recommend(ed)? burn/i);
   });
 
-  test('debris planner tab is labeled as concept study', async ({ page }) => {
+  test('ADR planner ranks bundled derelicts with cited trade-offs', async ({ page }) => {
     await openFetscape(page);
     await page.getByTestId('tab-debris').click();
     await expect(page.getByTestId('debris-planner')).toBeVisible();
-    await expect(page.getByTestId('concept-study-banner')).toContainText('Concept study tool');
-    await page.getByTestId('rank-debris').click();
-    await expect(page.getByTestId('debris-report')).toContainText('Debris Target Ranking');
-    await expect(page.getByTestId('debris-report')).toContainText('concept study');
+    await expect(page.getByTestId('concept-study-banner')).toContainText('Decision support');
+    await expect(page.getByTestId('derelict-source')).toContainText('CelesTrak');
+    await expect(page.getByTestId('derelict-ranking-table')).toBeVisible();
+    await expect(page.getByTestId('derelict-criteria')).toContainText('source:');
+    await expect(page.getByTestId('derelict-criteria')).toContainText('trade-off:');
+    await expect(page.getByTestId('debris-report')).toContainText('ADR Target Ranking');
+    await expect(page.getByTestId('debris-planner')).not.toContainText(/collision risk/i);
+    await expect(page.getByTestId('debris-planner')).not.toContainText(/recommend(ed)? burn/i);
+  });
+
+  test('proximity screening defaults to replay; live mode is opt-in', async ({ page }) => {
+    await openFetscape(page);
+    await expect(page.getByTestId('live-mode-panel')).toBeVisible();
+    await expect(page.getByTestId('live-mode-toggle')).not.toBeChecked();
+    await expect(page.getByTestId('screen-mode-label')).toContainText('REPLAY');
+    await page.getByTestId('run-proximity-screen').click();
+    await expect(page.getByTestId('proximity-disclaimer')).toContainText(/GEOMETRIC/i);
+    await expect(page.getByTestId('proximity-table')).toBeVisible();
+    await expect(page.getByTestId('proximity-table')).toContainText('Geometric');
+    await expect(page.getByTestId('proximity-disclaimer')).toContainText(/proximity only/i);
+    await expect(page.getByTestId('proximity-disclaimer')).not.toContainText(/collision risk/i);
+
+    await page.getByTestId('live-mode-toggle').check();
+    await expect(page.getByTestId('live-mode-toggle')).toBeChecked();
+    // CI stays offline: opt-in only changes the action label; live fetch is not required to succeed.
+    await expect(page.getByTestId('run-proximity-screen')).toContainText(/live/i);
   });
 
   test('approval card requires explicit approve before export', async ({ page }) => {

@@ -190,6 +190,56 @@
   font-weight: 600;
 }
 
+.fetscape-live-toggle {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
+  font-weight: 600;
+}
+
+.fetscape-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin: 1rem 0;
+}
+
+.fetscape-table th,
+.fetscape-table td {
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  padding: 0.55rem 0.4rem;
+  vertical-align: top;
+}
+
+.fetscape-table tr.selected {
+  background: #fff7ed;
+}
+
+.fetscape-table button {
+  border: none;
+  background: none;
+  color: #c2410c;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.fetscape-target-detail {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: #f8fafc;
+}
+
+.fetscape-target-detail ul {
+  padding-left: 1.1rem;
+  line-height: 1.55;
+}
+
 .fetscape-approval {
   border: 3px solid #ea580c;
   border-radius: 12px;
