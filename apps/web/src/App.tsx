@@ -9,7 +9,8 @@ import { ReviewPanel } from './components/ReviewPanel';
 
 const CaptureLab = lazy(() => import('./capture/CaptureLab'));
 const FetscapeApp = lazy(() => import('./fetscape/FetscapeApp'));
-type Page = 'operations' | 'removal' | 'capture' | 'datasets' | 'history' | 'methodology' | 'fetscape';
+type Page =
+  'operations' | 'removal' | 'capture' | 'datasets' | 'history' | 'methodology' | 'fetscape';
 type History = {
   id: string;
   createdAt: string;
@@ -980,9 +981,7 @@ export default function App() {
           ) : null}
           {page === 'fetscape' ? (
             <Suspense
-              fallback={
-                <div className="loading-state">Loading Fetscape AI workspace…</div>
-              }
+              fallback={<div className="loading-state">Loading Fetscape AI workspace…</div>}
             >
               <FetscapeApp mode="judge" />
             </Suspense>
