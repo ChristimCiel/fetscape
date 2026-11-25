@@ -8,7 +8,8 @@ import { OrbitView, RangeChart, RelativeView } from './components/OrbitView';
 import { ReviewPanel } from './components/ReviewPanel';
 
 const CaptureLab = lazy(() => import('./capture/CaptureLab'));
-type Page = 'operations' | 'removal' | 'capture' | 'datasets' | 'history' | 'methodology';
+const FetscapeApp = lazy(() => import('./fetscape/FetscapeApp'));
+type Page = 'operations' | 'removal' | 'capture' | 'datasets' | 'history' | 'methodology' | 'fetscape';
 type History = {
   id: string;
   createdAt: string;
@@ -18,6 +19,7 @@ type History = {
   status: string;
 }[];
 const NAV: [Page, string, string][] = [
+  ['fetscape', 'Fetscape AI Workspace', 'target'],
   ['operations', 'Satellite operations', 'orbit'],
   ['removal', 'Debris removal lab', 'target'],
   ['capture', 'Capture rehearsal', 'camera'],
@@ -975,6 +977,15 @@ export default function App() {
                 </div>
               )}
             </>
+          ) : null}
+          {page === 'fetscape' ? (
+            <Suspense
+              fallback={
+                <div className="loading-state">Loading Fetscape AI workspace…</div>
+              }
+            >
+              <FetscapeApp mode="judge" />
+            </Suspense>
           ) : null}
           {page === 'capture' ? (
             <Suspense
