@@ -35,14 +35,19 @@ const NAV: [Page, string, string][] = [
 ];
 const LAB_PAGES = new Set<Page>(LAB_RAIL.map((r) => r.id));
 
-function pageFromHash(): { page: Page; productTab: ProductTab } {
+/** In-page skip-link targets — never treat as product/Lab routes. */
+const HASH_ANCHORS = new Set(['main', 'fx-main']);
+
+function pageFromHash(): { page: Page; productTab: ProductTab } | null {
   const hash = location.hash.replace(/^#\/?/, '');
+  if (!hash || HASH_ANCHORS.has(hash)) return null;
   if (hash === 'fetscape/debris' || hash.startsWith('fetscape/debris')) {
     return { page: 'fetscape', productTab: 'debris' };
   }
   const id = hash.split('/')[0];
   const match = NAV.find((n) => n[0] === id)?.[0];
-  return { page: match ?? 'fetscape', productTab: 'mission' };
+  if (!match) return null;
+  return { page: match, productTab: 'mission' };
 }
 const classification = (d: Dataset) =>
   d.kind === 'synthetic'
@@ -90,7 +95,10 @@ function Countdown({ event, time }: { event: Encounter; time: number }) {
   );
 }
 export default function App() {
-  const initialRoute = pageFromHash();
+  const initialRoute = pageFromHash() ?? {
+    page: 'fetscape' as Page,
+    productTab: 'mission' as ProductTab,
+  };
   const [page, setPage] = useState<Page>(() => initialRoute.page);
   const [productTab, setProductTab] = useState<ProductTab>(() => initialRoute.productTab);
   const [language, setLanguage] = useState<Language>(() => detectLanguage());
@@ -127,6 +135,7 @@ export default function App() {
   useEffect(() => {
     const changed = () => {
       const next = pageFromHash();
+      if (!next) return; // ignore #main / #fx-main skip-link anchors
       setPage(next.page);
       if (next.page === 'fetscape') setProductTab(next.productTab);
     };
