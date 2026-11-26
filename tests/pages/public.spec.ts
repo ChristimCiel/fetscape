@@ -69,7 +69,7 @@ test('public root, read-only inputs, refresh, history and mobile layout', async 
   await expect(page.getByTestId('fetscape-app')).toBeVisible();
   await expect(
     page.getByRole('heading', {
-      name: 'Know your disposal and orbit picture before launch review.',
+      name: 'Will your satellite re-enter in time?',
     }),
   ).toBeVisible();
   await page.goto('./#/datasets');

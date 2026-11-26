@@ -1,8 +1,8 @@
 /**
- * Fetscape product surface — Mission readiness + Debris removal (Suite UI).
+ * Fetscape v2 — Orbit Instrument body (ready + debris panes).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Language, MissionProfile, AgentTrace, ApprovalRequest } from './types';
 import { AgentOrchestrator } from './agent/orchestrator';
 import { t } from './i18n/translations';
@@ -19,8 +19,11 @@ import {
   type CloseApproachSnapshot,
 } from './tools/close-approach-replay';
 import { runLiveOrReplayScreen } from './tools/live-screen';
+import { REGULATIONS_DB } from './tools/regulations';
+import { formatLifetimeYears, mapVerdict } from './tools/ruleAltitudes';
 import { tSuite } from '../suite/i18n';
-import './styles.css';
+import OrbitShellPlot from './OrbitShellPlot';
+import './instrument.css';
 
 export type ProductTab = 'mission' | 'debris';
 
@@ -34,7 +37,7 @@ interface FetscapeAppProps {
   onJudgeModeChange?: (on: boolean) => void;
 }
 
-const PRESET_KEYS = ['preset.taiwan', 'preset.commercial', 'preset.crewed'] as const;
+const PRESET_KEYS = ['v2.preset.0', 'v2.preset.1', 'v2.preset.2'] as const;
 
 export default function FetscapeApp({
   mode = 'judge',
@@ -42,7 +45,7 @@ export default function FetscapeApp({
   language,
   productTab,
   onProductTabChange,
-  judgeMode = true,
+  judgeMode = false,
   onJudgeModeChange,
 }: FetscapeAppProps) {
   const [judgeStep, setJudgeStep] = useState(0);
@@ -50,9 +53,7 @@ export default function FetscapeApp({
   const [analyzing, setAnalyzing] = useState(false);
   const [progressLabel, setProgressLabel] = useState('');
   const [missionIndex, setMissionIndex] = useState(0);
-  const [editing, setEditing] = useState(false);
-  const [draftAltitude, setDraftAltitude] = useState(DEMO_MISSIONS[0].orbit.altitude ?? 510);
-  const [draftMass, setDraftMass] = useState(DEMO_MISSIONS[0].mass ?? 10);
+  const [altitude, setAltitude] = useState(DEMO_MISSIONS[0].orbit.altitude ?? 510);
   const [profile, setProfile] = useState<MissionProfile>(DEMO_MISSIONS[0]);
   const [readiness, setReadiness] = useState<ReadinessResult>(() =>
     computeReadiness(DEMO_MISSIONS[0]),
@@ -64,6 +65,11 @@ export default function FetscapeApp({
   const [showAllDebris, setShowAllDebris] = useState(false);
   const [liveOptIn, setLiveOptIn] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
+  const [nearOpen, setNearOpen] = useState(false);
+  const [toast, setToast] = useState('');
+  const [highlightPreset, setHighlightPreset] = useState(false);
+  const ctaRef = useRef<HTMLButtonElement>(null);
+  const livePanelRef = useRef<HTMLDetailsElement>(null);
   const [screenResult, setScreenResult] = useState<{
     mode: 'live' | 'replay';
     snapshot: CloseApproachSnapshot;
@@ -88,14 +94,45 @@ export default function FetscapeApp({
   );
   const walkthrough = useMemo(() => buildWalkthroughSteps(readiness), [readiness]);
   const currentWalkthroughStep = walkthrough[judgeStep];
+  const verdict = mapVerdict(readiness.complies5Year, readiness.complies25Year);
+  const lifeLabel = formatLifetimeYears(readiness.lifetimeYears);
+  const instrumentMode = productTab === 'debris' ? 'adr' : 'ready';
 
   useEffect(() => {
     if (judgeMode) setCoachHidden(false);
   }, [judgeMode]);
 
+  useEffect(() => {
+    if (!selectedTargetId && ranked[0]) setSelectedTargetId(ranked[0].id);
+  }, [ranked, selectedTargetId]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && approvalKind) {
+        setApprovalKind(null);
+        setPendingApprovals((prev) =>
+          prev.map((a) => (a.status === 'pending' ? { ...a, status: 'rejected' } : a)),
+        );
+        ctaRef.current?.focus();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [approvalKind]);
+
+  function applyAltitude(nextAlt: number, base: MissionProfile = profile) {
+    const next: MissionProfile = {
+      ...base,
+      orbit: { ...base.orbit, altitude: nextAlt },
+    };
+    setAltitude(nextAlt);
+    setProfile(next);
+    setReadiness(computeReadiness(next));
+  }
+
   async function runReadiness(nextProfile: MissionProfile = profile) {
     setAnalyzing(true);
-    setProgressLabel(language === 'en' ? 'Running deterministic tools…' : '執行確定性工具…');
+    setProgressLabel(language === 'en' ? 'Verifying…' : '驗證中…');
     try {
       const next = computeReadiness(nextProfile);
       setReadiness(next);
@@ -140,49 +177,48 @@ export default function FetscapeApp({
   }
 
   async function handleJudgeNext() {
-    if (judgeStep >= walkthrough.length - 1) return;
+    if (judgeStep >= walkthrough.length - 1) {
+      onProductTabChange?.('mission');
+      setNearOpen(false);
+      return;
+    }
     const next = judgeStep + 1;
     setJudgeStep(next);
+    setHighlightPreset(next === 1);
     if (judgeStep === 1) await runReadiness(profile);
     if (next === 3) onProductTabChange?.('debris');
+    if (next === 4) {
+      onProductTabChange?.('mission');
+      setNearOpen(true);
+      requestAnimationFrame(() => {
+        if (livePanelRef.current) livePanelRef.current.open = true;
+      });
+    }
+    if (next === walkthrough.length - 1) onProductTabChange?.('mission');
   }
 
   function selectPreset(index: number) {
     const mission = DEMO_MISSIONS[index];
     setMissionIndex(index);
     setProfile(mission);
-    setDraftAltitude(mission.orbit.altitude ?? 500);
-    setDraftMass(mission.mass ?? 10);
+    const alt = mission.orbit.altitude ?? 500;
+    setAltitude(alt);
     setReadiness(computeReadiness(mission));
-    setEditing(false);
-  }
-
-  function applyEdits() {
-    const next: MissionProfile = {
-      ...profile,
-      mass: draftMass,
-      orbit: { ...profile.orbit, altitude: draftAltitude },
-    };
-    setProfile(next);
-    setReadiness(computeReadiness(next));
-    setEditing(false);
   }
 
   function requestExport(kind: 'evidence' | 'ranking') {
+    if (kind === 'evidence') {
+      void runReadiness(profile);
+      return;
+    }
     setApprovalKind(kind);
     setPendingApprovals([
       {
         id: `approval-${Date.now()}`,
         type: 'export',
-        title:
-          kind === 'evidence'
-            ? tSuite('approval.exportTitle', language)
-            : tSuite('approval.exportRanking', language),
+        title: tSuite('v2.adr.cta', language),
         description: t('approval.description', language),
-        payload:
-          kind === 'evidence'
-            ? { trace, readiness, profile }
-            : { ranking: ranked, report: debrisReport },
+        payload: { ranking: ranked, report: debrisReport },
         status: 'pending',
       },
     ]);
@@ -194,6 +230,7 @@ export default function FetscapeApp({
     );
     if (!approved) {
       setApprovalKind(null);
+      ctaRef.current?.focus();
       return;
     }
     const approval = pendingApprovals.find((a) => a.id === id);
@@ -208,508 +245,477 @@ export default function FetscapeApp({
     a.click();
     URL.revokeObjectURL(url);
     setApprovalKind(null);
+    setToast(tSuite('v2.toast.saved', language));
+    window.setTimeout(() => setToast(''), 2800);
   }
 
-  const stepperStates = ['profile', 'screen', 'lifetime', 'rules', 'signoff'] as const;
-  const activeStepIndex = approvalKind ? 4 : readiness ? 3 : 0;
+  const evidenceText =
+    trace?.finalResponse ??
+    `GEOMETRIC SCREENING ONLY. Not probability of collision (Pc).\nDeorbit screening: ${readiness.lifetimeYears} yr · derelicts in sample (±25 km): ${readiness.shellObjects}.\nDecision support for a qualified operator.`;
+
+  const citations = [
+    ...(REGULATIONS_DB.taiwan ?? []).slice(0, 2),
+    ...(REGULATIONS_DB.fcc ?? []).slice(0, 2),
+  ];
+
+  const missionSentence = tSuite('v2.mission', language)
+    .replace('{mass}', String(profile.mass ?? '—'))
+    .replace('{inc}', String(profile.orbit.inclination));
 
   return (
-    <div className="fetscape-app" data-testid="fetscape-app">
-      {productTab === 'mission' ? (
-        <>
-          <section className="sx-hero">
-            <div className="sx-hero__copy">
-              <span className="sx-eyebrow">{tSuite('hero.eyebrow', language)}</span>
-              <h1>{tSuite('hero.h1', language)}</h1>
-              <p>{tSuite('hero.sub', language)}</p>
-              <div className="sx-hero__actions">
-                <button
-                  type="button"
-                  className="sx-btn sx-btn--primary"
-                  onClick={() => void runReadiness()}
-                  disabled={analyzing}
-                >
-                  {tSuite('hero.run', language)}
-                </button>
-                <button
-                  type="button"
-                  className="sx-btn sx-btn--ghost"
-                  onClick={() => setEditing((v) => !v)}
-                >
-                  {tSuite('hero.edit', language)}
-                </button>
-              </div>
-              <span className="sx-chip">
-                {tSuite('hero.chip', language)} · CelesTrak {readiness.shellSnapshotDate}
-              </span>
-            </div>
-            <div className="sx-hero__artifact">
-              <div className="sx-card sx-card--focus">
-                <div className="sx-preset-row" role="group" aria-label="Mission presets">
-                  {DEMO_MISSIONS.map((m, i) => (
-                    <button
-                      key={m.name}
-                      type="button"
-                      aria-pressed={missionIndex === i}
-                      onClick={() => selectPreset(i)}
-                    >
-                      {tSuite(PRESET_KEYS[i], language)}
-                    </button>
-                  ))}
-                </div>
-                <div className="sx-mission-fields">
-                  <div>
-                    {tSuite('hero.mass', language)}{' '}
-                    <strong className="sx-num">{profile.mass ?? '—'} kg</strong>
-                  </div>
-                  <div>
-                    {tSuite('hero.altitude', language)}{' '}
-                    <strong className="sx-num">{profile.orbit.altitude ?? '—'} km</strong>
-                  </div>
-                  <div>
-                    {tSuite('hero.incl', language)}{' '}
-                    <strong className="sx-num">{profile.orbit.inclination}°</strong>
-                  </div>
-                  <div>
-                    {tSuite('hero.propulsion', language)}{' '}
-                    <strong>
-                      {profile.hasNoPropulsion
-                        ? tSuite('hero.propulsionNone', language)
-                        : tSuite('hero.propulsionYes', language)}
-                    </strong>
-                  </div>
-                </div>
-                {editing ? (
-                  <div className="sx-mission-fields">
-                    <label>
-                      {tSuite('hero.altitude', language)}
-                      <input
-                        type="number"
-                        className="sx-num"
-                        value={draftAltitude}
-                        onChange={(e) => setDraftAltitude(Number(e.target.value))}
-                      />
-                    </label>
-                    <label>
-                      {tSuite('hero.mass', language)}
-                      <input
-                        type="number"
-                        className="sx-num"
-                        value={draftMass}
-                        onChange={(e) => setDraftMass(Number(e.target.value))}
-                      />
-                    </label>
-                    <button type="button" className="sx-btn sx-btn--secondary" onClick={applyEdits}>
-                      {tSuite('hero.run', language)}
-                    </button>
-                  </div>
-                ) : null}
-                <button
-                  type="button"
-                  className="sx-btn sx-btn--primary"
-                  data-testid="run-readiness"
-                  onClick={() => void runReadiness()}
-                  disabled={analyzing}
-                >
-                  {tSuite('hero.run', language)}
-                </button>
-              </div>
-            </div>
-          </section>
+    <>
+      <div className="fx-wrap" style={{ flex: 1 }}>
+        <section className="fx-inst">
+          <h1 className="fx-q">
+            {instrumentMode === 'ready' ? tSuite('v2.h1', language) : tSuite('v2.h1.adr', language)}
+          </h1>
+          <p className="fx-qs">
+            {instrumentMode === 'ready'
+              ? tSuite('v2.h1.sub', language)
+              : tSuite('v2.h1.adr.sub', language)}
+          </p>
 
-          <ol className="sx-stepper" aria-label="Readiness steps">
-            {stepperStates.map((key, i) => (
-              <li
-                key={key}
-                className={
-                  i < activeStepIndex ? 'is-done' : i === activeStepIndex ? 'is-active' : 'is-todo'
+          {instrumentMode === 'ready' ? (
+            <div className="fx-mission">
+              <div
+                className="fx-presets"
+                style={
+                  highlightPreset
+                    ? { boxShadow: '0 0 0 2px var(--fx-cyan)', borderRadius: 12, padding: 4 }
+                    : undefined
                 }
               >
-                {tSuite(
-                  (
-                    {
-                      profile: 'stepper.profile',
-                      screen: 'stepper.screen',
-                      lifetime: 'stepper.lifetime',
-                      rules: 'stepper.rules',
-                      signoff: 'stepper.signoff',
-                    } as const
-                  )[key],
-                  language,
-                )}
-              </li>
-            ))}
-          </ol>
-
-          <div className="sx-stats" data-testid="analysis-results">
-            <div className="sx-card sx-stat">
-              <span className="sx-stat__label">{tSuite('stat.deorbit', language)}</span>
-              <span className="sx-stat__value sx-num">{readiness.lifetimeYears} yr</span>
-              <span className="sx-stat__meta sx-num">
-                {readiness.lifetimeRange[0]}–{readiness.lifetimeRange[1]} yr
-              </span>
-              <details className="sx-disclosure">
-                <summary>{tSuite('stat.how', language)}</summary>
-                <p className="sx-muted">
-                  {readiness.method}. {readiness.uncertainties[0]}
-                </p>
-              </details>
-            </div>
-            <div className="sx-card sx-stat">
-              <span className="sx-stat__label">{tSuite('stat.nstc', language)}</span>
-              <span
-                className={`sx-status ${readiness.complies25Year ? 'sx-status--positive' : 'sx-status--caution'}`}
-              >
-                {readiness.complies25Year
-                  ? tSuite('stat.within', language)
-                  : tSuite('stat.exceeds', language)}
-              </span>
-              <details className="sx-disclosure">
-                <summary>{tSuite('stat.source', language)}</summary>
-                <p className="sx-muted">NSTC disposal guidance · screening estimate</p>
-              </details>
-            </div>
-            <div className="sx-card sx-stat">
-              <span className="sx-stat__label">{tSuite('stat.fcc', language)}</span>
-              <span
-                className={`sx-status ${readiness.complies5Year ? 'sx-status--positive' : 'sx-status--caution'}`}
-              >
-                {readiness.complies5Year
-                  ? tSuite('stat.within', language)
-                  : tSuite('stat.exceeds', language)}
-              </span>
-              <details className="sx-disclosure">
-                <summary>{tSuite('stat.source', language)}</summary>
-                <p className="sx-muted">FCC 5-year rule · screening estimate</p>
-              </details>
-            </div>
-            <div className="sx-card sx-stat">
-              <span className="sx-stat__label">{tSuite('stat.shell', language)}</span>
-              <span className="sx-stat__value sx-num">
-                {readiness.shellObjects}{' '}
-                <span style={{ fontSize: '13px', fontWeight: 400 }}>
-                  {tSuite('stat.objects', language)}
+                {DEMO_MISSIONS.map((m, i) => (
+                  <button
+                    key={m.name}
+                    type="button"
+                    className="fx-preset"
+                    aria-pressed={missionIndex === i}
+                    onClick={() => selectPreset(i)}
+                  >
+                    {tSuite(PRESET_KEYS[i], language)}
+                  </button>
+                ))}
+                <span className="fx-sentence">
+                  {missionSentence.split(' · ').map((part, i, arr) => (
+                    <span key={part}>
+                      {i === 0 || i === 1 ? <b>{part}</b> : part}
+                      {i < arr.length - 1 ? ' · ' : ''}
+                    </span>
+                  ))}
                 </span>
-              </span>
-              <span
-                className="sx-status sx-status--neutral"
-                data-testid="verification-status"
-                style={{ alignSelf: 'flex-start', marginTop: 4 }}
-              >
-                {t(`common.${trace?.verificationStatus ?? 'verified'}`, language)}
-              </span>
-              <details className="sx-disclosure">
-                <summary>{tSuite('stat.snapshot', language)}</summary>
-                <p className="sx-muted">
-                  {readiness.shellSource} · {readiness.shellSnapshotDate}
-                </p>
-              </details>
-            </div>
-          </div>
-          <p className="sx-muted">{tSuite('stat.meaning', language)}</p>
-
-          <div className="sx-note sx-note--safety" data-testid="safety-disclaimers">
-            <strong>{t('safety.title', language)}</strong>
-            <ul style={{ margin: '8px 0 0', paddingLeft: '1.1rem' }}>
-              <li>{t('missionReadiness.disclaimers.geometricOnly', language)}</li>
-              <li>{t('missionReadiness.disclaimers.decisionSupport', language)}</li>
-              <li>{t('missionReadiness.disclaimers.noManeuvers', language)}</li>
-              <li>{t('missionReadiness.disclaimers.noCommanding', language)}</li>
-            </ul>
-            <p style={{ marginTop: 8 }}>{tSuite('safety.note', language)}</p>
-          </div>
-
-          <pre className="fetscape-report" data-testid="evidence-pack">
-            {trace?.finalResponse ??
-              `GEOMETRIC SCREENING ONLY. Not probability of collision (Pc).\nDeorbit screening: ${readiness.lifetimeYears} yr · shell objects (bundled snapshot ±25 km): ${readiness.shellObjects}.\nDecision support for a qualified operator.`}
-          </pre>
-
-          <div className="sx-hero__actions" style={{ marginTop: 16 }}>
-            <button
-              type="button"
-              className="sx-btn sx-btn--primary"
-              onClick={() => requestExport('evidence')}
-            >
-              {tSuite('approval.exportTitle', language)}
-            </button>
-          </div>
-
-          <section className="sx-card" data-testid="live-mode-panel" style={{ marginTop: 24 }}>
-            <h2 style={{ marginTop: 0, fontSize: 17 }}>{tSuite('proximity.title', language)}</h2>
-            <label
-              className="fetscape-live-toggle"
-              style={{ display: 'flex', gap: 8, alignItems: 'center' }}
-            >
-              <input
-                type="checkbox"
-                className="sx-switch"
-                data-testid="live-mode-toggle"
-                checked={liveOptIn}
-                onChange={(e) => setLiveOptIn(e.target.checked)}
-              />
-              {tSuite('proximity.live', language)}
-            </label>
-            <div style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                className="sx-btn sx-btn--secondary"
-                data-testid="run-proximity-screen"
-                disabled={liveBusy}
-                onClick={() => {
-                  if (liveOptIn) void handleLiveScreen();
-                  else
-                    setScreenResult({
-                      mode: 'replay',
-                      snapshot: getReplayCloseApproachSnapshot(),
-                    });
-                }}
-              >
-                {liveBusy
-                  ? language === 'en'
-                    ? 'Running…'
-                    : '執行中…'
-                  : liveOptIn
-                    ? tSuite('proximity.runLive', language)
-                    : tSuite('proximity.runReplay', language)}
-              </button>
-            </div>
-            <p data-testid="screen-mode-label" className="sx-muted">
-              {screenResult.mode === 'live'
-                ? tSuite('proximity.modeLive', language)
-                : `${tSuite('proximity.modeReplay', language)}${screenResult.reason ? ` (${screenResult.reason})` : ''}`}
-            </p>
-            <div className="sx-note sx-note--safety" data-testid="proximity-disclaimer">
-              <strong>{screenResult.snapshot.disclaimer}</strong>
-              <p className="sx-muted">{tSuite('proximity.illustrative', language)}</p>
-            </div>
-            <table className="sx-table sx-table--stack" data-testid="proximity-table">
-              <caption className="sx-muted" style={{ textAlign: 'left', padding: '8px 12px' }}>
-                Geometric proximity
-              </caption>
-              <thead>
-                <tr>
-                  <th>Object</th>
-                  <th>TCA (UTC)</th>
-                  <th className="sx-num">Miss (km)</th>
-                  <th className="sx-num">Rel. V (km/s)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {screenResult.snapshot.approaches.map((a) => (
-                  <tr key={a.targetId + a.tcaUtc}>
-                    <td data-label="Object">{a.targetName}</td>
-                    <td data-label="TCA" className="sx-num">
-                      {a.tcaUtc.slice(0, 16)}
-                    </td>
-                    <td data-label="Miss (km)" className="sx-num sx-proximity">
-                      {a.missDistanceKm.toFixed(1)}
-                    </td>
-                    <td data-label="Rel. V" className="sx-num sx-proximity">
-                      {a.relativeVelocityKmS.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </>
-      ) : null}
-
-      {productTab === 'debris' ? (
-        <section data-testid="debris-planner">
-          <div className="sx-note" data-testid="concept-study-banner">
-            {tSuite('debris.decisionBanner', language)}
-          </div>
-          <h2>{tSuite('debris.h2', language)}</h2>
-          <p className="sx-muted">{tSuite('debris.sub', language)}</p>
-          <p data-testid="derelict-source">
-            {language === 'en' ? 'Source: ' : '來源：'}
-            {derelict.meta.source}
-            <br />
-            <code className="sx-mono">SHA-256 {derelict.meta.contentSha256.slice(0, 20)}…</code>
-          </p>
-          <table className="sx-table sx-table--stack" data-testid="derelict-ranking-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Object</th>
-                <th>Class</th>
-                <th className="sx-num">Alt (km)</th>
-                <th className="sx-num">Lifetime (yr)</th>
-                <th className="sx-num">Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRanked.map((row, idx) => (
-                <tr
-                  key={row.id}
-                  className={selected?.id === row.id ? 'selected' : ''}
-                  data-testid={`derelict-row-${row.catalogId}`}
-                >
-                  <td data-label="#">{idx + 1}</td>
-                  <td data-label="Object">
-                    <button
-                      type="button"
-                      className="sx-btn sx-btn--ghost"
-                      style={{ height: 'auto', padding: 0 }}
-                      onClick={() => setSelectedTargetId(row.id)}
-                    >
-                      {row.name}
-                    </button>
-                    <span
-                      className="sx-score-bar"
-                      style={{ width: `${Math.round(row.rankingScore * 80)}px`, marginLeft: 8 }}
-                      title={`score ${row.rankingScore}`}
-                    />
-                  </td>
-                  <td data-label="Class">{row.objectClass}</td>
-                  <td data-label="Alt" className="sx-num">
-                    {Math.round(row.altitude)}
-                  </td>
-                  <td data-label="Lifetime" className="sx-num">
-                    {row.estimatedLifetimeYears}
-                  </td>
-                  <td data-label="Score" className="sx-num">
-                    {row.rankingScore}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="sx-hero__actions">
-            <button
-              type="button"
-              className="sx-btn sx-btn--secondary"
-              onClick={() => setShowAllDebris((v) => !v)}
-            >
-              {showAllDebris
-                ? tSuite('debris.showTop', language)
-                : `${tSuite('debris.showAll', language)} ${ranked.length}`}
-            </button>
-            <button
-              type="button"
-              className="sx-btn sx-btn--primary"
-              onClick={() => requestExport('ranking')}
-            >
-              {tSuite('debris.export', language)}
-            </button>
-          </div>
-
-          {selected ? (
-            <div className="sx-card" data-testid="derelict-detail" style={{ marginTop: 16 }}>
-              <h3>
-                {selected.name} <span className="sx-muted sx-num">NORAD {selected.catalogId}</span>
-              </h3>
-              <ul data-testid="derelict-criteria">
-                {selected.criteriaDetail.map((c) => (
-                  <li key={c.criterion}>
-                    <strong>{c.criterion}</strong> (w={c.weight}, score={c.score.toFixed(2)}):{' '}
-                    {c.value}
-                    <br />
-                    <span className="sx-muted">source: {c.source}</span>
-                    <br />
-                    <span className="sx-muted">trade-off: {c.tradeOff}</span>
-                  </li>
-                ))}
-              </ul>
+              </div>
             </div>
           ) : null}
 
-          <pre className="fetscape-report" data-testid="debris-report">
-            {debrisReport}
-          </pre>
+          <OrbitShellPlot
+            mode={instrumentMode}
+            profile={profile}
+            altitude={altitude}
+            onAltitude={(n) => applyAltitude(n)}
+            ranked={ranked}
+            selectedId={selected?.id ?? ''}
+            onSelect={setSelectedTargetId}
+            language={language}
+            yearsText={lifeLabel}
+            highlightMarker={highlightPreset}
+          />
         </section>
-      ) : null}
 
-      {pendingApprovals.some((a) => a.status === 'pending') && approvalKind ? (
-        <section
-          className="sx-approval"
-          data-testid="approval-card"
-          role="region"
-          aria-labelledby="sx-approval-heading"
-        >
-          <div className="sx-approval-banner">
-            <strong id="sx-approval-heading">{tSuite('approval.needs', language)}</strong>
-            <span>
-              {approvalKind === 'evidence'
-                ? tSuite('approval.exportTitle', language)
-                : tSuite('approval.exportRanking', language)}
-            </span>
-          </div>
-          {pendingApprovals
-            .filter((a) => a.status === 'pending')
-            .map((approval) => (
-              <div key={approval.id}>
-                <dl className="sx-approval__facts">
-                  <div>
-                    <dt>{tSuite('approval.what', language)}</dt>
-                    <dd>{tSuite('approval.whatBody', language)}</dd>
-                  </div>
-                  <div>
-                    <dt>{tSuite('approval.scope', language)}</dt>
-                    <dd>{tSuite('approval.scopeBody', language)}</dd>
-                  </div>
-                  <div>
-                    <dt>{tSuite('approval.files', language)}</dt>
-                    <dd className="sx-mono">fetscape-analysis-*.json</dd>
-                  </div>
-                  <div>
-                    <dt>{tSuite('approval.destination', language)}</dt>
-                    <dd>{tSuite('approval.destinationBody', language)}</dd>
-                  </div>
-                  <div>
-                    <dt>{tSuite('approval.executedBy', language)}</dt>
-                    <dd>{tSuite('approval.executedByBody', language)}</dd>
-                  </div>
-                </dl>
-                <div className="sx-approval__actions">
-                  <button
-                    type="button"
-                    data-testid="approve-export"
-                    className="sx-btn sx-btn--primary"
-                    onClick={() => handleApproval(approval.id, true)}
-                  >
-                    {tSuite('approval.approveExport', language)}
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="reject-export"
-                    className="sx-btn sx-btn--ghost"
-                    onClick={() => handleApproval(approval.id, false)}
-                  >
-                    {tSuite('approval.notNow', language)}
-                  </button>
-                </div>
-                <p className="sx-approval__reassurance">
-                  {tSuite('approval.reassurance', language)}
-                </p>
-                <details className="sx-disclosure">
-                  <summary>{tSuite('approval.preview', language)}</summary>
-                  <pre className="fetscape-report">
-                    {approvalKind === 'ranking'
-                      ? debrisReport.slice(0, 1200)
-                      : (trace?.finalResponse ?? JSON.stringify(readiness, null, 2))}
-                  </pre>
-                </details>
+        <section className="fx-read" data-testid="analysis-results" aria-live="polite">
+          {instrumentMode === 'ready' ? (
+            <>
+              <div className="fx-mctx">
+                {tSuite(PRESET_KEYS[missionIndex], language)} ·{' '}
+                <span className="mono">{altitude} km</span> ·{' '}
+                <a href="#plot-anchor">{tSuite('v2.mctx.change', language)}</a>
               </div>
-            ))}
+
+              <div>
+                <div
+                  className="fx-lbl"
+                  style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                >
+                  <span>{tSuite('v2.read.label', language)}</span>
+                  <span
+                    data-testid="verification-status"
+                    style={{ color: 'var(--fx-pass)', textTransform: 'none', letterSpacing: 0 }}
+                  >
+                    {trace?.verificationStatus === 'verified' || approvalKind === 'evidence'
+                      ? tSuite('v2.read.verified', language)
+                      : tSuite('v2.read.verified', language)}
+                  </span>
+                </div>
+                {analyzing ? (
+                  <span data-testid="analysis-progress" className="fx-range">
+                    {progressLabel || tSuite('v2.verifying', language)}
+                  </span>
+                ) : null}
+                <div className="fx-life mono">
+                  {lifeLabel}
+                  <small>{tSuite('v2.read.unit', language)}</small>
+                </div>
+                <div className="fx-range mono">
+                  {tSuite('v2.read.range', language)
+                    .replace('{a}', String(readiness.lifetimeRange[0]))
+                    .replace('{b}', formatLifetimeYears(readiness.lifetimeRange[1]))}
+                  {readiness.lifetimeYears >= 1000 ? ` ${tSuite('v2.read.cap', language)}` : ''}
+                </div>
+              </div>
+
+              <div className={`fx-verdict fx-verdict--${verdict}`} role="status">
+                <i aria-hidden />
+                {tSuite(`v2.verdict.${verdict}`, language)}
+              </div>
+
+              <div className="fx-rules">
+                <div className="fx-rule">
+                  <div>
+                    <div className="n">{tSuite('v2.rule.nstc', language)}</div>
+                    <div className="s">{tSuite('v2.rule.nstc.sub', language)}</div>
+                  </div>
+                  <div
+                    className={`fx-st ${readiness.complies25Year ? 'fx-st--pass' : 'fx-st--miss'}`}
+                  >
+                    <i aria-hidden />
+                    {readiness.complies25Year
+                      ? tSuite('v2.rule.meets', language)
+                      : tSuite('v2.rule.misses', language)}
+                  </div>
+                </div>
+                <div className="fx-rule">
+                  <div>
+                    <div className="n">{tSuite('v2.rule.fcc', language)}</div>
+                    <div className="s">{tSuite('v2.rule.fcc.sub', language)}</div>
+                  </div>
+                  <div
+                    className={`fx-st ${readiness.complies5Year ? 'fx-st--pass' : 'fx-st--miss'}`}
+                  >
+                    <i aria-hidden />
+                    {readiness.complies5Year
+                      ? tSuite('v2.rule.meets', language)
+                      : tSuite('v2.rule.misses', language)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="fx-sample">
+                <span>{tSuite('v2.sample', language).replace('{alt}', String(altitude))}</span>
+                <span className="mono">{readiness.shellObjects}</span>
+              </div>
+
+              {approvalKind === 'evidence' ? (
+                <section
+                  className="fx-approval"
+                  data-testid="approval-card"
+                  role="region"
+                  aria-labelledby="ap-title"
+                >
+                  <h2 id="ap-title">{tSuite('v2.ap.title', language)}</h2>
+                  <dl>
+                    <div>
+                      <dt>Contents</dt>
+                      <dd>{tSuite('v2.ap.contents', language)}</dd>
+                    </div>
+                    <div>
+                      <dt>Goes to</dt>
+                      <dd>{tSuite('v2.ap.dest', language)} (fetscape-analysis-*.json/.txt)</dd>
+                    </div>
+                    <div>
+                      <dt>Reviewer</dt>
+                      <dd>{tSuite('v2.ap.reviewer', language)}</dd>
+                    </div>
+                  </dl>
+                  <pre className="fx-pack" data-testid="evidence-pack">
+                    {evidenceText}
+                  </pre>
+                  {pendingApprovals
+                    .filter((a) => a.status === 'pending')
+                    .map((approval) => (
+                      <div key={approval.id} className="fx-approval__actions">
+                        <button
+                          type="button"
+                          className="fx-primary"
+                          data-testid="approve-export"
+                          onClick={() => handleApproval(approval.id, true)}
+                        >
+                          {tSuite('v2.ap.approve', language)}
+                        </button>
+                        <button
+                          type="button"
+                          className="fx-quiet"
+                          data-testid="reject-export"
+                          onClick={() => handleApproval(approval.id, false)}
+                        >
+                          {tSuite('v2.ap.reject', language)}
+                        </button>
+                      </div>
+                    ))}
+                </section>
+              ) : (
+                <>
+                  <button
+                    ref={ctaRef}
+                    type="button"
+                    className="fx-primary"
+                    data-testid="run-readiness"
+                    disabled={analyzing}
+                    onClick={() => requestExport('evidence')}
+                  >
+                    {tSuite('v2.cta.evidence', language)}
+                  </button>
+
+                  <details>
+                    <summary>{tSuite('v2.how', language)}</summary>
+                    <p>{readiness.method}</p>
+                    <p>{tSuite('v2.how.mass', language)}</p>
+                    <ul>
+                      {readiness.assumptions.slice(0, 3).map((a) => (
+                        <li key={a}>{a}</li>
+                      ))}
+                      {readiness.uncertainties.slice(0, 2).map((u) => (
+                        <li key={u}>{u}</li>
+                      ))}
+                    </ul>
+                    <ul>
+                      {citations.map((c) => (
+                        <li key={`${c.source}-${c.section}`}>
+                          {c.url ? (
+                            <a href={c.url} target="_blank" rel="noreferrer">
+                              {c.source} §{c.section}
+                            </a>
+                          ) : (
+                            `${c.source} §${c.section}`
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+
+                  <details
+                    ref={livePanelRef}
+                    data-testid="live-mode-panel"
+                    open={nearOpen || undefined}
+                    onToggle={(e) => setNearOpen((e.target as HTMLDetailsElement).open)}
+                  >
+                    <summary>{tSuite('v2.near', language)}</summary>
+                    <p data-testid="screen-mode-label" className="mono" style={{ fontSize: 12 }}>
+                      {screenResult.mode === 'live'
+                        ? tSuite('proximity.modeLive', language)
+                        : tSuite('proximity.modeReplay', language)}
+                    </p>
+                    <label
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'center',
+                        margin: '10px 0',
+                        color: 'var(--fx-ink-2)',
+                        fontSize: 13,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        className="fx-switch"
+                        data-testid="live-mode-toggle"
+                        checked={liveOptIn}
+                        onChange={(e) => setLiveOptIn(e.target.checked)}
+                      />
+                      {tSuite('proximity.live', language)}
+                    </label>
+                    <button
+                      type="button"
+                      className="fx-quiet"
+                      data-testid="run-proximity-screen"
+                      disabled={liveBusy}
+                      onClick={() => {
+                        if (liveOptIn) void handleLiveScreen();
+                        else
+                          setScreenResult({
+                            mode: 'replay',
+                            snapshot: getReplayCloseApproachSnapshot(),
+                          });
+                      }}
+                    >
+                      {liveBusy
+                        ? language === 'en'
+                          ? 'Running…'
+                          : '執行中…'
+                        : liveOptIn
+                          ? tSuite('proximity.runLive', language)
+                          : tSuite('proximity.runReplay', language)}
+                    </button>
+                    <div data-testid="proximity-disclaimer" style={{ marginTop: 12 }}>
+                      <strong>{screenResult.snapshot.disclaimer}</strong>
+                      <p className="fx-range">{tSuite('proximity.illustrative', language)}</p>
+                    </div>
+                    <table className="fx-prox-table" data-testid="proximity-table">
+                      <caption>Geometric proximity</caption>
+                      <thead>
+                        <tr>
+                          <th>Object</th>
+                          <th>TCA (UTC)</th>
+                          <th>Miss (km)</th>
+                          <th>Rel. V (km/s)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {screenResult.snapshot.approaches.map((a) => (
+                          <tr key={a.targetId + a.tcaUtc}>
+                            <td data-label="Object">{a.targetName}</td>
+                            <td data-label="TCA">{a.tcaUtc.slice(0, 16)}</td>
+                            <td data-label="Miss">{a.missDistanceKm.toFixed(1)}</td>
+                            <td data-label="Rel. V">{a.relativeVelocityKmS.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                </>
+              )}
+              <span id="plot-anchor" hidden />
+            </>
+          ) : (
+            <section data-testid="debris-planner">
+              <p data-testid="concept-study-banner">{tSuite('v2.adr.banner', language)}</p>
+              <p data-testid="derelict-source">
+                {tSuite('v2.adr.source', language)
+                  .replace('{source}', derelict.meta.source)
+                  .replace('{date}', derelict.meta.acquiredAt.slice(0, 10))
+                  .replace('{n}', String(derelict.objects.length))}
+              </p>
+              <ol className="fx-targets" data-testid="derelict-ranking-table">
+                {visibleRanked.map((row, idx) => (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      className="fx-tc"
+                      data-testid={`derelict-row-${row.catalogId}`}
+                      aria-pressed={selected?.id === row.id}
+                      onClick={() => setSelectedTargetId(row.id)}
+                    >
+                      <span className="rk">{String(idx + 1).padStart(2, '0')}</span>
+                      <span>
+                        <div className="nm">{row.name}</div>
+                        <div className="mt mono">
+                          NORAD {row.catalogId} · {Math.round(row.altitude)} km ·{' '}
+                          {row.inclination.toFixed(1)}°
+                        </div>
+                      </span>
+                      <span className="fx-sbar" aria-hidden>
+                        <i style={{ width: `${Math.round(row.rankingScore * 100)}%` }} />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <button
+                type="button"
+                className="fx-quiet"
+                style={{ alignSelf: 'flex-start', marginTop: 4 }}
+                onClick={() => setShowAllDebris((v) => !v)}
+              >
+                {showAllDebris
+                  ? language === 'en'
+                    ? 'Show top 5'
+                    : '顯示前 5'
+                  : tSuite('v2.adr.showAll', language).replace('{n}', String(ranked.length))}
+              </button>
+
+              {selected ? (
+                <div data-testid="derelict-detail" style={{ marginTop: 16 }}>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>
+                    {selected.name}{' '}
+                    <span className="mono" style={{ color: 'var(--fx-ink-3)', fontWeight: 400 }}>
+                      NORAD {selected.catalogId}
+                    </span>
+                  </h3>
+                  <ul className="fx-crit" data-testid="derelict-criteria">
+                    {selected.criteriaDetail.map((c) => (
+                      <li key={c.criterion}>
+                        <strong>{c.criterion}</strong> value {String(c.value)} score{' '}
+                        {c.score.toFixed(2)}
+                        <br />
+                        source: {c.source}
+                        <br />
+                        trade-off: {c.tradeOff}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {!approvalKind ? (
+                <button
+                  type="button"
+                  className="fx-primary"
+                  style={{ marginTop: 16 }}
+                  onClick={() => requestExport('ranking')}
+                >
+                  {tSuite('v2.adr.cta', language)}
+                </button>
+              ) : (
+                <section
+                  className="fx-approval"
+                  data-testid="approval-card"
+                  role="region"
+                  aria-labelledby="ap-title-adr"
+                  style={{ marginTop: 16 }}
+                >
+                  <h2 id="ap-title-adr">{tSuite('v2.ap.title', language)}</h2>
+                  <pre className="fx-pack" data-testid="evidence-pack">
+                    {debrisReport.slice(0, 1200)}
+                  </pre>
+                  {pendingApprovals
+                    .filter((a) => a.status === 'pending')
+                    .map((approval) => (
+                      <div key={approval.id} className="fx-approval__actions">
+                        <button
+                          type="button"
+                          className="fx-primary"
+                          data-testid="approve-export"
+                          onClick={() => handleApproval(approval.id, true)}
+                        >
+                          {tSuite('v2.ap.approve', language)}
+                        </button>
+                        <button
+                          type="button"
+                          className="fx-quiet"
+                          data-testid="reject-export"
+                          onClick={() => handleApproval(approval.id, false)}
+                        >
+                          {tSuite('v2.ap.reject', language)}
+                        </button>
+                      </div>
+                    ))}
+                </section>
+              )}
+
+              <details style={{ marginTop: 16 }}>
+                <summary>{tSuite('v2.adr.report', language)}</summary>
+                <pre className="fx-pack" data-testid="debris-report">
+                  {debrisReport}
+                </pre>
+              </details>
+            </section>
+          )}
         </section>
-      ) : null}
+      </div>
 
       {judgeMode && !coachHidden ? (
-        <aside className="sx-coach" data-testid="judge-walkthrough">
-          <div className="sx-coach__meta" data-testid="judge-mode-meta">
+        <aside className="fx-coach" data-testid="judge-walkthrough">
+          <div className="fx-coach__meta" data-testid="judge-mode-meta">
             {t('judge.title', language)} — {judgeStep + 1} / {walkthrough.length}
           </div>
           <h2 data-testid="walkthrough-title">{currentWalkthroughStep.title[language]}</h2>
           <p data-testid="walkthrough-description">
             {currentWalkthroughStep.description[language]}
           </p>
-          <div className="sx-coach__actions">
+          <div className="fx-coach__actions">
             {judgeStep > 0 ? (
               <button
                 type="button"
-                className="sx-btn sx-btn--ghost"
+                className="fx-quiet"
                 data-testid="walkthrough-prev"
                 onClick={() => setJudgeStep(Math.max(0, judgeStep - 1))}
               >
@@ -718,7 +724,8 @@ export default function FetscapeApp({
             ) : null}
             <button
               type="button"
-              className="sx-btn sx-btn--primary"
+              className="fx-primary"
+              style={{ width: 'auto', minHeight: 40, padding: '8px 14px' }}
               data-testid="walkthrough-next"
               onClick={() => void handleJudgeNext()}
             >
@@ -728,7 +735,7 @@ export default function FetscapeApp({
             </button>
             <button
               type="button"
-              className="sx-btn sx-btn--ghost"
+              className="fx-quiet"
               onClick={() => {
                 setCoachHidden(true);
                 onJudgeModeChange?.(false);
@@ -740,15 +747,11 @@ export default function FetscapeApp({
         </aside>
       ) : null}
 
-      {analyzing ? (
-        <div className="fetscape-overlay" data-testid="analysis-progress" role="status">
-          <div className="fetscape-overlay-card">
-            <div className="fetscape-spinner" aria-hidden="true" />
-            <div>{t('missionReadiness.analyzing', language)}</div>
-            <p>{progressLabel || t('common.loading', language)}</p>
-          </div>
+      {toast ? (
+        <div className="fx-toast" role="status">
+          {toast}
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

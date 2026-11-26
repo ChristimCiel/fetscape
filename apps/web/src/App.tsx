@@ -7,6 +7,7 @@ import { Icon } from './components/Icon';
 import { OrbitView, RangeChart, RelativeView } from './components/OrbitView';
 import { ReviewPanel } from './components/ReviewPanel';
 import SuiteShell, { LAB_RAIL, type LabPage, type ProductTab } from './suite/SuiteShell';
+import InstrumentShell from './fetscape/InstrumentShell';
 import { detectLanguage } from './suite/language';
 import type { Language } from './fetscape/types';
 
@@ -33,6 +34,16 @@ const NAV: [Page, string, string][] = [
   ['methodology', 'Scientific basis', 'book'],
 ];
 const LAB_PAGES = new Set<Page>(LAB_RAIL.map((r) => r.id));
+
+function pageFromHash(): { page: Page; productTab: ProductTab } {
+  const hash = location.hash.replace(/^#\/?/, '');
+  if (hash === 'fetscape/debris' || hash.startsWith('fetscape/debris')) {
+    return { page: 'fetscape', productTab: 'debris' };
+  }
+  const id = hash.split('/')[0];
+  const match = NAV.find((n) => n[0] === id)?.[0];
+  return { page: match ?? 'fetscape', productTab: 'mission' };
+}
 const classification = (d: Dataset) =>
   d.kind === 'synthetic'
     ? 'SYNTHETIC · FICTIONAL OBJECTS'
@@ -79,12 +90,13 @@ function Countdown({ event, time }: { event: Encounter; time: number }) {
   );
 }
 export default function App() {
-  const [page, setPage] = useState<Page>(
-    () => NAV.find((n) => `#/${n[0]}` === location.hash)?.[0] ?? 'fetscape',
-  );
-  const [productTab, setProductTab] = useState<ProductTab>('mission');
+  const initialRoute = pageFromHash();
+  const [page, setPage] = useState<Page>(() => initialRoute.page);
+  const [productTab, setProductTab] = useState<ProductTab>(() => initialRoute.productTab);
   const [language, setLanguage] = useState<Language>(() => detectLanguage());
-  const [judgeMode, setJudgeMode] = useState(true);
+  const [judgeMode, setJudgeMode] = useState(() =>
+    new URLSearchParams(location.search).has('judge'),
+  );
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [run, setRun] = useState<Analysis | null>(null);
   const [eventId, setEventId] = useState('');
@@ -107,13 +119,16 @@ export default function App() {
   const [importFormat, setImportFormat] = useState('omm');
   const [importText, setImportText] = useState('');
   useEffect(() => {
-    window.history.replaceState(null, '', `#/${page}`);
+    const nextHash =
+      page === 'fetscape' && productTab === 'debris' ? '#/fetscape/debris' : `#/${page}`;
+    if (location.hash !== nextHash) window.history.replaceState(null, '', nextHash);
     setPlaying(false);
-  }, [page]);
+  }, [page, productTab]);
   useEffect(() => {
     const changed = () => {
-      const next = NAV.find((n) => `#/${n[0]}` === location.hash)?.[0];
-      if (next) setPage(next);
+      const next = pageFromHash();
+      setPage(next.page);
+      if (next.page === 'fetscape') setProductTab(next.productTab);
     };
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);
@@ -325,6 +340,35 @@ export default function App() {
     run && target
       ? `/api/targets/report?datasetId=${encodeURIComponent(run.dataset.id)}&servicerId=${encodeURIComponent(run.parameters.primaryId)}&targetId=${encodeURIComponent(target.id)}`
       : '';
+
+  if (page === 'fetscape') {
+    return (
+      <InstrumentShell
+        language={language}
+        onLanguageChange={setLanguage}
+        judgeMode={judgeMode}
+        onJudgeModeChange={setJudgeMode}
+        mode={productTab === 'debris' ? 'adr' : 'ready'}
+        onModeChange={(m) => {
+          setProductTab(m === 'adr' ? 'debris' : 'mission');
+          setPage('fetscape');
+        }}
+        onSelectLab={goLab}
+      >
+        <Suspense fallback={<div className="loading-state">Loading Fetscape…</div>}>
+          <FetscapeApp
+            mode="judge"
+            language={language}
+            productTab={productTab}
+            onProductTabChange={setProductTab}
+            judgeMode={judgeMode}
+            onJudgeModeChange={setJudgeMode}
+          />
+        </Suspense>
+      </InstrumentShell>
+    );
+  }
+
   return (
     <SuiteShell
       language={language}
@@ -338,74 +382,72 @@ export default function App() {
       onSelectLab={goLab}
       showLabRail={LAB_PAGES.has(page)}
     >
-      <div className={`sx-legacy-wrap ${page === 'fetscape' ? '' : 'workspace'}`}>
-        {page !== 'fetscape' ? (
-          <div className="page-heading">
-            <div>
-              <span className="eyebrow">
-                {page === 'capture'
-                  ? 'FIRST-PERSON CAPTURE LAB'
+      <div className="sx-legacy-wrap workspace">
+        <div className="page-heading">
+          <div>
+            <span className="eyebrow">
+              {page === 'capture'
+                ? 'FIRST-PERSON CAPTURE LAB'
+                : page === 'removal'
+                  ? 'MISSION EXPLORATION'
+                  : page === 'methodology'
+                    ? 'ORBITAL DECISION SUPPORT'
+                    : 'LAB'}
+            </span>
+            <h1>
+              {page === 'operations'
+                ? 'Understand the encounter.'
+                : page === 'capture'
+                  ? 'Plan the approach. Test the escape.'
                   : page === 'removal'
-                    ? 'MISSION EXPLORATION'
-                    : page === 'methodology'
-                      ? 'ORBITAL DECISION SUPPORT'
-                      : 'LAB'}
-              </span>
-              <h1>
-                {page === 'operations'
-                  ? 'Understand the encounter.'
-                  : page === 'capture'
-                    ? 'Plan the approach. Test the escape.'
-                    : page === 'removal'
-                      ? 'Evaluate the next target.'
-                      : page === 'datasets'
-                        ? 'Know your inputs.'
-                        : page === 'history'
-                          ? 'Every analysis, traceable.'
-                          : page === 'methodology'
-                            ? 'The science behind the screen.'
-                            : 'Lab workspace'}
-              </h1>
-              <p>
-                {page === 'operations'
-                  ? 'Explore relative geometry, examine the evidence, and record a considered next step.'
-                  : page === 'capture'
-                    ? 'First-person capture rehearsal for approach and escape practice. Preserve evidence for review. Decision support only.'
-                    : page === 'removal'
-                      ? 'Compare orbital geometry and identify what a removal assessment still needs.'
-                      : page === 'datasets'
-                        ? 'Frozen snapshots and validated imports. Provenance travels with every result.'
-                        : page === 'history'
-                          ? 'Reopen a saved run with its original inputs, parameters, and review records.'
-                          : 'Capabilities, assumptions, and limits are part of the product.'}
-              </p>
-            </div>
-            {run && (page === 'operations' || page === 'removal') ? (
-              <div className="heading-actions">
-                <a
-                  className="button secondary"
-                  href={downloadUrl(
-                    page === 'removal' ? targetReportUrl : `/api/analyses/${run.id}/report`,
-                  )}
-                  download
-                >
-                  <Icon name="download" size={16} />
-                  {page === 'removal' ? 'Target brief' : 'Export report'}
-                </a>
-                <a
-                  className="icon-button"
-                  aria-label="Export full analysis JSON"
-                  title="Export full analysis JSON"
-                  href={downloadUrl(`/api/analyses/${run.id}/export`)}
-                  download
-                >
-                  <Icon name="layers" />
-                </a>
-              </div>
-            ) : null}
+                    ? 'Evaluate the next target.'
+                    : page === 'datasets'
+                      ? 'Know your inputs.'
+                      : page === 'history'
+                        ? 'Every analysis, traceable.'
+                        : page === 'methodology'
+                          ? 'The science behind the screen.'
+                          : 'Lab workspace'}
+            </h1>
+            <p>
+              {page === 'operations'
+                ? 'Explore relative geometry, examine the evidence, and record a considered next step.'
+                : page === 'capture'
+                  ? 'First-person capture rehearsal for approach and escape practice. Preserve evidence for review. Decision support only.'
+                  : page === 'removal'
+                    ? 'Compare orbital geometry and identify what a removal assessment still needs.'
+                    : page === 'datasets'
+                      ? 'Frozen snapshots and validated imports. Provenance travels with every result.'
+                      : page === 'history'
+                        ? 'Reopen a saved run with its original inputs, parameters, and review records.'
+                        : 'Capabilities, assumptions, and limits are part of the product.'}
+            </p>
           </div>
-        ) : null}
-        {PUBLIC_DEMO && page !== 'fetscape' ? (
+          {run && (page === 'operations' || page === 'removal') ? (
+            <div className="heading-actions">
+              <a
+                className="button secondary"
+                href={downloadUrl(
+                  page === 'removal' ? targetReportUrl : `/api/analyses/${run.id}/report`,
+                )}
+                download
+              >
+                <Icon name="download" size={16} />
+                {page === 'removal' ? 'Target brief' : 'Export report'}
+              </a>
+              <a
+                className="icon-button"
+                aria-label="Export full analysis JSON"
+                title="Export full analysis JSON"
+                href={downloadUrl(`/api/analyses/${run.id}/export`)}
+                download
+              >
+                <Icon name="layers" />
+              </a>
+            </div>
+          ) : null}
+        </div>
+        {PUBLIC_DEMO ? (
           <div className="public-demo-notice" role="note">
             <strong>Public interactive demo</strong>
             <span>
@@ -937,18 +979,6 @@ export default function App() {
               </div>
             )}
           </>
-        ) : null}
-        {page === 'fetscape' ? (
-          <Suspense fallback={<div className="loading-state">Loading Fetscape AI workspace…</div>}>
-            <FetscapeApp
-              mode="judge"
-              language={language}
-              productTab={productTab}
-              onProductTabChange={setProductTab}
-              judgeMode={judgeMode}
-              onJudgeModeChange={setJudgeMode}
-            />
-          </Suspense>
         ) : null}
         {page === 'capture' ? (
           <Suspense

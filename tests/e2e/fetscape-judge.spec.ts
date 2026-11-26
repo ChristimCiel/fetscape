@@ -5,7 +5,7 @@
 import { test, expect } from '@playwright/test';
 
 async function openFetscape(page: import('@playwright/test').Page) {
-  await page.goto('/');
+  await page.goto('/?judge=1');
   await expect(page.getByTestId('fetscape-app')).toBeVisible();
   await expect(page.getByTestId('fetscape-brand')).toHaveText('Fetscape');
   await expect(page.getByTestId('judge-mode-badge')).toBeVisible();
@@ -73,6 +73,7 @@ test.describe('Fetscape Judge Mode', () => {
   test('proximity screening defaults to replay; live mode is opt-in', async ({ page }) => {
     await openFetscape(page);
     await expect(page.getByTestId('live-mode-panel')).toBeVisible();
+    await page.getByTestId('live-mode-panel').locator('summary').click();
     await expect(page.getByTestId('live-mode-toggle')).not.toBeChecked();
     await expect(page.getByTestId('screen-mode-label')).toContainText('REPLAY');
     await page.getByTestId('run-proximity-screen').click();
