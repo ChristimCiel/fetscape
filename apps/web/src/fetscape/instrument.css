@@ -88,13 +88,15 @@
   flex-shrink: 0;
   height: 56px;
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 0 24px;
   border-bottom: 1px solid var(--fx-hair);
-  flex-wrap: wrap;
   background: var(--fx-void);
+  overflow: visible;
 }
 
 /* Reset legacy workspace `main` / `h1` rules from styles.css inside the instrument. */
@@ -128,9 +130,12 @@
   border: none;
   cursor: pointer;
   padding: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .fx-seg {
   display: inline-flex;
+  flex-shrink: 0;
   background: var(--fx-panel-2);
   border: 1px solid var(--fx-hair);
   border-radius: 10px;
@@ -153,31 +158,54 @@
   color: var(--fx-ink);
   box-shadow: inset 0 0 0 1px var(--fx-hair-2);
 }
-.fx-bar__r {
+/*
+ * Reset legacy workspace `nav { flex-direction: column }` / `nav button`
+ * rules from styles.css — those made Lab · Judge Mode · 中文 stack and
+ * overflow the fixed 56px bar at mid desktop widths (e.g. 1280×800).
+ */
+.fx nav.fx-bar__r {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 4px;
   align-items: center;
   margin-left: auto;
   position: relative;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
-.fx-link {
+.fx-link,
+.fx nav.fx-bar__r button,
+.fx nav.fx-bar__r .fx-link {
   background: none;
   border: 0;
   color: var(--fx-ink-2);
   font-size: 14px;
+  font-weight: 500;
   padding: 8px 10px;
   border-radius: 8px;
   min-height: 40px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  text-align: center;
+  white-space: nowrap;
+  margin: 0;
 }
-.fx-link:hover {
+.fx-link:hover,
+.fx nav.fx-bar__r button:hover,
+.fx nav.fx-bar__r .fx-link:hover {
   color: var(--fx-ink);
   background: var(--fx-panel-2);
 }
-.fx-link.pill {
+.fx-link.pill,
+.fx nav.fx-bar__r button.pill {
   border: 1px solid var(--fx-hair-2);
 }
-.fx-link.pill[aria-pressed='true'] {
+.fx-link.pill[aria-pressed='true'],
+.fx nav.fx-bar__r button.pill[aria-pressed='true'] {
   border-color: var(--fx-cyan);
   color: var(--fx-ink);
   background: var(--fx-cyan-dim);
@@ -743,6 +771,7 @@ html[lang='zh-TW'] .fx-lbl {
   }
   .fx-bar {
     height: auto;
+    flex-wrap: wrap;
     padding: 10px 16px;
   }
   .fx-bar .fx-seg {
@@ -752,6 +781,10 @@ html[lang='zh-TW'] .fx-lbl {
   .fx-bar .fx-seg button {
     flex: 1;
     min-height: 40px;
+  }
+  .fx nav.fx-bar__r {
+    flex-direction: row;
+    flex-wrap: nowrap;
   }
   .fx-q {
     font-size: 20px;
