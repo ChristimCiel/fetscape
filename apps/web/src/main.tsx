@@ -1,8 +1,13 @@
 import { createRoot } from 'react-dom/client';
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
-import App from './App';
+import '@fontsource-variable/inter/index.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import './suite/suite.css';
 import './styles.css';
+import App from './App';
+
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
   state = { error: false };
   static getDerivedStateFromError() {

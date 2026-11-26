@@ -66,10 +66,13 @@ test('public capture, degraded thrust, orbital replay and static downloads', asy
 
 test('public root, read-only inputs, refresh, history and mobile layout', async ({ page }) => {
   await page.goto('./');
+  await expect(page.getByTestId('fetscape-app')).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Plan the approach. Test the escape.' }),
+    page.getByRole('heading', {
+      name: 'Will your satellite re-enter in time?',
+    }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Data sources', exact: true }).click();
+  await page.goto('./#/datasets');
   await expect(page.getByRole('button', { name: 'Validate and import' })).toBeDisabled();
   await expect(page.getByLabel('Element data')).toBeDisabled();
   await page.getByRole('button', { name: 'Analysis history', exact: true }).click();

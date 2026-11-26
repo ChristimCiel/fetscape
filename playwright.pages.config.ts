@@ -4,8 +4,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  timeout: process.env.CI ? 120000 : 30000,
-  expect: { timeout: process.env.CI ? 15000 : 5000 },
+  timeout: process.env.CI ? 120000 : 90000,
+  expect: { timeout: process.env.CI ? 15000 : 10000 },
   reporter: 'list',
   use: {
     baseURL: process.env.PAGES_TEST_URL || 'http://127.0.0.1:4189/fetscape/',

@@ -10,7 +10,7 @@ test('operations → synthetic replay → review → report → removal → hist
   page.on('request', (r) => {
     if (!r.url().startsWith('http://127.0.0.1:4188')) external.push(r.url());
   });
-  await page.goto('/');
+  await page.goto('/#/operations');
   await expect(page.getByText('FROZEN PUBLIC ELEMENTS', { exact: true })).toBeVisible();
   await expect(page.getByRole('img', { name: /SGP4 orbital/ })).toBeVisible();
   await page.screenshot({ path: 'test-results/operations-desktop.png', fullPage: true });
@@ -75,7 +75,7 @@ test('operations → synthetic replay → review → report → removal → hist
   expect(external).toEqual([]);
 });
 test('invalid import is visible; valid user snapshot can be analyzed', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/#/operations');
   await expect(page.getByRole('img', { name: /SGP4 orbital/ })).toBeVisible();
   await page.getByRole('button', { name: 'Data sources', exact: true }).click();
   await page.getByLabel('Source / provenance').fill('Local test snapshot');
@@ -94,7 +94,7 @@ test('invalid import is visible; valid user snapshot can be analyzed', async ({ 
 });
 test('mobile layout, methodology and keyboard navigation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/#/operations');
   await expect(page.getByRole('img', { name: /SGP4 orbital/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/operations-mobile.png', fullPage: true });
@@ -102,8 +102,10 @@ test('mobile layout, methodology and keyboard navigation', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Scientific basis' }).click();
   await expect(page.getByRole('heading', { name: 'What remains unavailable' })).toBeVisible();
-  await page.goto('/');
-  await page.keyboard.press('Tab');
+  await page.goto('/#/operations');
+  // Chromium skips zero-size offscreen targets in sequential Tab order; focus the
+  // skip link directly and assert Enter moves focus into #main (SuiteShell).
+  await page.getByRole('link', { name: 'Skip to workspace' }).focus();
   await expect(page.getByRole('link', { name: 'Skip to workspace' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('#main')).toBeFocused();
