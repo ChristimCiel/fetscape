@@ -1,14 +1,14 @@
 /**
- * Fetscape v1 MVP — AI-native space operations workspace (judge + full modes)
+ * Fetscape product surface — Mission readiness + Debris removal (Suite UI).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Language, MissionProfile, AgentTrace, ApprovalRequest } from './types';
 import { AgentOrchestrator } from './agent/orchestrator';
 import { t } from './i18n/translations';
-import { DEMO_MISSIONS, DEMO_TRACE, WALKTHROUGH_STEPS } from './demo-data';
+import { DEMO_MISSIONS, DEMO_TRACE, buildWalkthroughSteps } from './demo-data';
+import { computeReadiness, type ReadinessResult } from './readiness';
 import {
-  DEFAULT_CRITERIA,
   formatDebrisRankingReport,
   getBundledDerelictCatalog,
   rankDerelictTargets,
@@ -19,22 +19,49 @@ import {
   type CloseApproachSnapshot,
 } from './tools/close-approach-replay';
 import { runLiveOrReplayScreen } from './tools/live-screen';
+import { tSuite } from '../suite/i18n';
 import './styles.css';
+
+export type ProductTab = 'mission' | 'debris';
 
 interface FetscapeAppProps {
   mode?: 'full' | 'judge';
   apiKey?: string;
+  language: Language;
+  productTab: ProductTab;
+  onProductTabChange?: (tab: ProductTab) => void;
+  judgeMode?: boolean;
+  onJudgeModeChange?: (on: boolean) => void;
 }
 
-export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps) {
-  const [language, setLanguage] = useState<Language>('en');
-  const [currentTab, setCurrentTab] = useState<'mission' | 'debris'>('mission');
+const PRESET_KEYS = ['preset.taiwan', 'preset.commercial', 'preset.crewed'] as const;
+
+export default function FetscapeApp({
+  mode = 'judge',
+  apiKey,
+  language,
+  productTab,
+  onProductTabChange,
+  judgeMode = true,
+  onJudgeModeChange,
+}: FetscapeAppProps) {
   const [judgeStep, setJudgeStep] = useState(0);
+  const [coachHidden, setCoachHidden] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [progressLabel, setProgressLabel] = useState('');
+  const [missionIndex, setMissionIndex] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [draftAltitude, setDraftAltitude] = useState(DEMO_MISSIONS[0].orbit.altitude ?? 510);
+  const [draftMass, setDraftMass] = useState(DEMO_MISSIONS[0].mass ?? 10);
+  const [profile, setProfile] = useState<MissionProfile>(DEMO_MISSIONS[0]);
+  const [readiness, setReadiness] = useState<ReadinessResult>(() =>
+    computeReadiness(DEMO_MISSIONS[0]),
+  );
   const [trace, setTrace] = useState<AgentTrace | null>(mode === 'judge' ? DEMO_TRACE : null);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
+  const [approvalKind, setApprovalKind] = useState<'evidence' | 'ranking' | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState('');
+  const [showAllDebris, setShowAllDebris] = useState(false);
   const [liveOptIn, setLiveOptIn] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
   const [screenResult, setScreenResult] = useState<{
@@ -47,37 +74,39 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
   const ranked = useMemo(
     () =>
       rankDerelictTargets(derelict.objects, {
-        criteria: DEFAULT_CRITERIA,
         dataSource: derelict.meta.source,
         contentSha256: derelict.meta.contentSha256,
       }),
     [derelict],
   );
+  const visibleRanked = showAllDebris ? ranked : ranked.slice(0, 5);
   const selected: RankedDerelict | undefined =
     ranked.find((r) => r.id === selectedTargetId) ?? ranked[0];
   const debrisReport = useMemo(
     () => formatDebrisRankingReport(ranked, language),
     [ranked, language],
   );
+  const walkthrough = useMemo(() => buildWalkthroughSteps(readiness), [readiness]);
+  const currentWalkthroughStep = walkthrough[judgeStep];
 
-  const isJudgeMode = mode === 'judge';
-  const currentWalkthroughStep = WALKTHROUGH_STEPS[judgeStep];
+  useEffect(() => {
+    if (judgeMode) setCoachHidden(false);
+  }, [judgeMode]);
 
-  async function handleAnalyzeMission(profile: MissionProfile) {
+  async function runReadiness(nextProfile: MissionProfile = profile) {
     setAnalyzing(true);
-    setProgressLabel(language === 'en' ? 'Orchestrator planning steps…' : '編排器規劃步驟中…');
+    setProgressLabel(language === 'en' ? 'Running deterministic tools…' : '執行確定性工具…');
     try {
+      const next = computeReadiness(nextProfile);
+      setReadiness(next);
+      setProfile(nextProfile);
       const orchestrator = new AgentOrchestrator({
         language,
         provider: apiKey ? 'anthropic' : 'deterministic',
         apiKey,
         maxTokens: 10000,
       });
-      setProgressLabel(
-        language === 'en' ? 'Running deterministic tools (replay)…' : '執行確定性工具（重播）…',
-      );
-      const result = await orchestrator.analyzeMissionReadiness(profile);
-      setProgressLabel(language === 'en' ? 'Verifier checking outputs…' : '驗證器檢查輸出…');
+      const result = await orchestrator.analyzeMissionReadiness(nextProfile);
       setTrace(result);
       if (result.verificationStatus === 'verified') {
         setPendingApprovals([
@@ -86,10 +115,11 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
             type: 'export',
             title: t('approval.exportReport', language),
             description: t('approval.description', language),
-            payload: result,
+            payload: { ...result, readiness: next },
             status: 'pending',
           },
         ]);
+        setApprovalKind('evidence');
       }
     } catch (error) {
       console.error('Analysis error:', error);
@@ -110,18 +140,62 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
   }
 
   async function handleJudgeNext() {
-    if (judgeStep >= WALKTHROUGH_STEPS.length - 1) return;
+    if (judgeStep >= walkthrough.length - 1) return;
     const next = judgeStep + 1;
     setJudgeStep(next);
-    if (judgeStep === 1) await handleAnalyzeMission(DEMO_MISSIONS[0]);
-    if (next === 3) setCurrentTab('debris');
+    if (judgeStep === 1) await runReadiness(profile);
+    if (next === 3) onProductTabChange?.('debris');
+  }
+
+  function selectPreset(index: number) {
+    const mission = DEMO_MISSIONS[index];
+    setMissionIndex(index);
+    setProfile(mission);
+    setDraftAltitude(mission.orbit.altitude ?? 500);
+    setDraftMass(mission.mass ?? 10);
+    setReadiness(computeReadiness(mission));
+    setEditing(false);
+  }
+
+  function applyEdits() {
+    const next: MissionProfile = {
+      ...profile,
+      mass: draftMass,
+      orbit: { ...profile.orbit, altitude: draftAltitude },
+    };
+    setProfile(next);
+    setReadiness(computeReadiness(next));
+    setEditing(false);
+  }
+
+  function requestExport(kind: 'evidence' | 'ranking') {
+    setApprovalKind(kind);
+    setPendingApprovals([
+      {
+        id: `approval-${Date.now()}`,
+        type: 'export',
+        title:
+          kind === 'evidence'
+            ? tSuite('approval.exportTitle', language)
+            : tSuite('approval.exportRanking', language),
+        description: t('approval.description', language),
+        payload:
+          kind === 'evidence'
+            ? { trace, readiness, profile }
+            : { ranking: ranked, report: debrisReport },
+        status: 'pending',
+      },
+    ]);
   }
 
   function handleApproval(id: string, approved: boolean) {
     setPendingApprovals((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status: approved ? 'approved' : 'rejected' } : a)),
     );
-    if (!approved) return;
+    if (!approved) {
+      setApprovalKind(null);
+      return;
+    }
     const approval = pendingApprovals.find((a) => a.id === id);
     if (!approval) return;
     const blob = new Blob([JSON.stringify(approval.payload, null, 2)], {
@@ -133,116 +207,252 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
     a.download = `fetscape-analysis-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    setApprovalKind(null);
   }
+
+  const stepperStates = ['profile', 'screen', 'lifetime', 'rules', 'signoff'] as const;
+  const activeStepIndex = approvalKind ? 4 : readiness ? 3 : 0;
 
   return (
     <div className="fetscape-app" data-testid="fetscape-app">
-      <header className="fetscape-header">
-        <div>
-          <h1 data-testid="fetscape-brand">{t('appName', language)}</h1>
-          <p className="fetscape-tagline">{t('tagline', language)}</p>
-        </div>
-        <div className="fetscape-header-actions">
-          {isJudgeMode ? (
-            <div className="fetscape-badge" data-testid="judge-mode-badge">
-              {t('judgeMode', language)}
-            </div>
-          ) : null}
-          <button
-            type="button"
-            data-testid="language-toggle"
-            className="fetscape-lang"
-            onClick={() => setLanguage(language === 'en' ? 'zh-TW' : 'en')}
-          >
-            {language === 'en' ? '中文' : 'English'}
-          </button>
-        </div>
-      </header>
-
-      {isJudgeMode ? (
-        <section className="fetscape-walkthrough" data-testid="judge-walkthrough">
-          <div className="fetscape-walkthrough-meta">
-            {t('judge.title', language)} — Step {judgeStep + 1} / {WALKTHROUGH_STEPS.length}
-          </div>
-          <h2 data-testid="walkthrough-title">{currentWalkthroughStep.title[language]}</h2>
-          <p data-testid="walkthrough-description">
-            {currentWalkthroughStep.description[language]}
-          </p>
-          <div className="fetscape-walkthrough-actions">
-            {judgeStep > 0 ? (
-              <button
-                type="button"
-                data-testid="walkthrough-prev"
-                onClick={() => setJudgeStep(Math.max(0, judgeStep - 1))}
-              >
-                {t('judge.prevStep', language)}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              data-testid="walkthrough-next"
-              className="fetscape-primary"
-              onClick={() => void handleJudgeNext()}
-            >
-              {judgeStep === WALKTHROUGH_STEPS.length - 1
-                ? t('judge.finish', language)
-                : currentWalkthroughStep.action[language]}
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      <div className="fetscape-tabs" role="tablist" aria-label="Fetscape lanes">
-        <button
-          type="button"
-          role="tab"
-          data-testid="tab-mission"
-          aria-selected={currentTab === 'mission'}
-          className={currentTab === 'mission' ? 'active' : ''}
-          onClick={() => setCurrentTab('mission')}
-        >
-          {t('lanes.missionReadiness', language)}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          data-testid="tab-debris"
-          aria-selected={currentTab === 'debris'}
-          className={currentTab === 'debris' ? 'active' : ''}
-          onClick={() => setCurrentTab('debris')}
-        >
-          {t('lanes.debrisRemoval', language)}
-        </button>
-      </div>
-
-      {currentTab === 'mission' ? (
+      {productTab === 'mission' ? (
         <>
-          <section className="fetscape-panel" data-testid="live-mode-panel">
-            <div className="fetscape-panel-head">
-              <div>
-                <h2>{language === 'en' ? 'Geometric proximity screening' : '幾何接近篩選'}</h2>
-                <p>
-                  {language === 'en'
-                    ? 'Judge default is bundled replay. Opt in to live CelesTrak + SGP4 in a Web Worker; failures fall back to replay.'
-                    : '評審預設使用內建重播。可選擇以 Web Worker 即時抓取 CelesTrak 並執行 SGP4；失敗則回退重播。'}
-                </p>
+          <section className="sx-hero">
+            <div className="sx-hero__copy">
+              <span className="sx-eyebrow">{tSuite('hero.eyebrow', language)}</span>
+              <h1>{tSuite('hero.h1', language)}</h1>
+              <p>{tSuite('hero.sub', language)}</p>
+              <div className="sx-hero__actions">
+                <button
+                  type="button"
+                  className="sx-btn sx-btn--primary"
+                  onClick={() => void runReadiness()}
+                  disabled={analyzing}
+                >
+                  {tSuite('hero.run', language)}
+                </button>
+                <button
+                  type="button"
+                  className="sx-btn sx-btn--ghost"
+                  onClick={() => setEditing((v) => !v)}
+                >
+                  {tSuite('hero.edit', language)}
+                </button>
+              </div>
+              <span className="sx-chip">
+                {tSuite('hero.chip', language)} · CelesTrak {readiness.shellSnapshotDate}
+              </span>
+            </div>
+            <div className="sx-hero__artifact">
+              <div className="sx-card sx-card--focus">
+                <div className="sx-preset-row" role="group" aria-label="Mission presets">
+                  {DEMO_MISSIONS.map((m, i) => (
+                    <button
+                      key={m.name}
+                      type="button"
+                      aria-pressed={missionIndex === i}
+                      onClick={() => selectPreset(i)}
+                    >
+                      {tSuite(PRESET_KEYS[i], language)}
+                    </button>
+                  ))}
+                </div>
+                <div className="sx-mission-fields">
+                  <div>
+                    {tSuite('hero.mass', language)}{' '}
+                    <strong className="sx-num">{profile.mass ?? '—'} kg</strong>
+                  </div>
+                  <div>
+                    {tSuite('hero.altitude', language)}{' '}
+                    <strong className="sx-num">{profile.orbit.altitude ?? '—'} km</strong>
+                  </div>
+                  <div>
+                    {tSuite('hero.incl', language)}{' '}
+                    <strong className="sx-num">{profile.orbit.inclination}°</strong>
+                  </div>
+                  <div>
+                    {tSuite('hero.propulsion', language)}{' '}
+                    <strong>
+                      {profile.hasNoPropulsion
+                        ? tSuite('hero.propulsionNone', language)
+                        : tSuite('hero.propulsionYes', language)}
+                    </strong>
+                  </div>
+                </div>
+                {editing ? (
+                  <div className="sx-mission-fields">
+                    <label>
+                      {tSuite('hero.altitude', language)}
+                      <input
+                        type="number"
+                        className="sx-num"
+                        value={draftAltitude}
+                        onChange={(e) => setDraftAltitude(Number(e.target.value))}
+                      />
+                    </label>
+                    <label>
+                      {tSuite('hero.mass', language)}
+                      <input
+                        type="number"
+                        className="sx-num"
+                        value={draftMass}
+                        onChange={(e) => setDraftMass(Number(e.target.value))}
+                      />
+                    </label>
+                    <button type="button" className="sx-btn sx-btn--secondary" onClick={applyEdits}>
+                      {tSuite('hero.run', language)}
+                    </button>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="sx-btn sx-btn--primary"
+                  data-testid="run-readiness"
+                  onClick={() => void runReadiness()}
+                  disabled={analyzing}
+                >
+                  {tSuite('hero.run', language)}
+                </button>
               </div>
             </div>
-            <label className="fetscape-live-toggle">
+          </section>
+
+          <ol className="sx-stepper" aria-label="Readiness steps">
+            {stepperStates.map((key, i) => (
+              <li
+                key={key}
+                className={
+                  i < activeStepIndex ? 'is-done' : i === activeStepIndex ? 'is-active' : 'is-todo'
+                }
+              >
+                {tSuite(
+                  (
+                    {
+                      profile: 'stepper.profile',
+                      screen: 'stepper.screen',
+                      lifetime: 'stepper.lifetime',
+                      rules: 'stepper.rules',
+                      signoff: 'stepper.signoff',
+                    } as const
+                  )[key],
+                  language,
+                )}
+              </li>
+            ))}
+          </ol>
+
+          <div className="sx-stats" data-testid="analysis-results">
+            <div className="sx-card sx-stat">
+              <span className="sx-stat__label">{tSuite('stat.deorbit', language)}</span>
+              <span className="sx-stat__value sx-num">{readiness.lifetimeYears} yr</span>
+              <span className="sx-stat__meta sx-num">
+                {readiness.lifetimeRange[0]}–{readiness.lifetimeRange[1]} yr
+              </span>
+              <details className="sx-disclosure">
+                <summary>{tSuite('stat.how', language)}</summary>
+                <p className="sx-muted">
+                  {readiness.method}. {readiness.uncertainties[0]}
+                </p>
+              </details>
+            </div>
+            <div className="sx-card sx-stat">
+              <span className="sx-stat__label">{tSuite('stat.nstc', language)}</span>
+              <span
+                className={`sx-status ${readiness.complies25Year ? 'sx-status--positive' : 'sx-status--caution'}`}
+              >
+                {readiness.complies25Year
+                  ? tSuite('stat.within', language)
+                  : tSuite('stat.exceeds', language)}
+              </span>
+              <details className="sx-disclosure">
+                <summary>{tSuite('stat.source', language)}</summary>
+                <p className="sx-muted">NSTC disposal guidance · screening estimate</p>
+              </details>
+            </div>
+            <div className="sx-card sx-stat">
+              <span className="sx-stat__label">{tSuite('stat.fcc', language)}</span>
+              <span
+                className={`sx-status ${readiness.complies5Year ? 'sx-status--positive' : 'sx-status--caution'}`}
+              >
+                {readiness.complies5Year
+                  ? tSuite('stat.within', language)
+                  : tSuite('stat.exceeds', language)}
+              </span>
+              <details className="sx-disclosure">
+                <summary>{tSuite('stat.source', language)}</summary>
+                <p className="sx-muted">FCC 5-year rule · screening estimate</p>
+              </details>
+            </div>
+            <div className="sx-card sx-stat">
+              <span className="sx-stat__label">{tSuite('stat.shell', language)}</span>
+              <span className="sx-stat__value sx-num">
+                {readiness.shellObjects}{' '}
+                <span style={{ fontSize: '13px', fontWeight: 400 }}>
+                  {tSuite('stat.objects', language)}
+                </span>
+              </span>
+              <span
+                className="sx-status sx-status--neutral"
+                data-testid="verification-status"
+                style={{ alignSelf: 'flex-start', marginTop: 4 }}
+              >
+                {t(`common.${trace?.verificationStatus ?? 'verified'}`, language)}
+              </span>
+              <details className="sx-disclosure">
+                <summary>{tSuite('stat.snapshot', language)}</summary>
+                <p className="sx-muted">
+                  {readiness.shellSource} · {readiness.shellSnapshotDate}
+                </p>
+              </details>
+            </div>
+          </div>
+          <p className="sx-muted">{tSuite('stat.meaning', language)}</p>
+
+          <div className="sx-note sx-note--safety" data-testid="safety-disclaimers">
+            <strong>{t('safety.title', language)}</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: '1.1rem' }}>
+              <li>{t('missionReadiness.disclaimers.geometricOnly', language)}</li>
+              <li>{t('missionReadiness.disclaimers.decisionSupport', language)}</li>
+              <li>{t('missionReadiness.disclaimers.noManeuvers', language)}</li>
+              <li>{t('missionReadiness.disclaimers.noCommanding', language)}</li>
+            </ul>
+            <p style={{ marginTop: 8 }}>{tSuite('safety.note', language)}</p>
+          </div>
+
+          <pre className="fetscape-report" data-testid="evidence-pack">
+            {trace?.finalResponse ??
+              `GEOMETRIC SCREENING ONLY. Not probability of collision (Pc).\nDeorbit screening: ${readiness.lifetimeYears} yr · shell objects (bundled snapshot ±25 km): ${readiness.shellObjects}.\nDecision support for a qualified operator.`}
+          </pre>
+
+          <div className="sx-hero__actions" style={{ marginTop: 16 }}>
+            <button
+              type="button"
+              className="sx-btn sx-btn--primary"
+              onClick={() => requestExport('evidence')}
+            >
+              {tSuite('approval.exportTitle', language)}
+            </button>
+          </div>
+
+          <section className="sx-card" data-testid="live-mode-panel" style={{ marginTop: 24 }}>
+            <h2 style={{ marginTop: 0, fontSize: 17 }}>{tSuite('proximity.title', language)}</h2>
+            <label
+              className="fetscape-live-toggle"
+              style={{ display: 'flex', gap: 8, alignItems: 'center' }}
+            >
               <input
                 type="checkbox"
+                className="sx-switch"
                 data-testid="live-mode-toggle"
                 checked={liveOptIn}
                 onChange={(e) => setLiveOptIn(e.target.checked)}
               />
-              {language === 'en'
-                ? 'Enable live mode (opt-in, network required)'
-                : '啟用即時模式（需連線）'}
+              {tSuite('proximity.live', language)}
             </label>
-            <div className="fetscape-walkthrough-actions">
+            <div style={{ marginTop: 12 }}>
               <button
                 type="button"
-                className="fetscape-primary"
+                className="sx-btn sx-btn--secondary"
                 data-testid="run-proximity-screen"
                 disabled={liveBusy}
                 onClick={() => {
@@ -256,167 +466,149 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
               >
                 {liveBusy
                   ? language === 'en'
-                    ? 'Running live worker…'
-                    : '執行即時 Worker…'
+                    ? 'Running…'
+                    : '執行中…'
                   : liveOptIn
-                    ? language === 'en'
-                      ? 'Run live proximity screen'
-                      : '執行即時接近篩選'
-                    : language === 'en'
-                      ? 'Show replay proximity screen'
-                      : '顯示重播接近篩選'}
+                    ? tSuite('proximity.runLive', language)
+                    : tSuite('proximity.runReplay', language)}
               </button>
             </div>
-            <p data-testid="screen-mode-label" className="fetscape-muted">
+            <p data-testid="screen-mode-label" className="sx-muted">
               {screenResult.mode === 'live'
-                ? language === 'en'
-                  ? 'Mode: LIVE (Web Worker)'
-                  : '模式：即時（Web Worker）'
-                : language === 'en'
-                  ? `Mode: REPLAY${screenResult.reason ? ` (fallback: ${screenResult.reason})` : ''}`
-                  : `模式：重播${screenResult.reason ? `（回退：${screenResult.reason}）` : ''}`}
+                ? tSuite('proximity.modeLive', language)
+                : `${tSuite('proximity.modeReplay', language)}${screenResult.reason ? ` (${screenResult.reason})` : ''}`}
             </p>
-            <div className="fetscape-safety" data-testid="proximity-disclaimer">
+            <div className="sx-note sx-note--safety" data-testid="proximity-disclaimer">
               <strong>{screenResult.snapshot.disclaimer}</strong>
-              <p className="fetscape-muted">
-                {language === 'en'
-                  ? 'Miss distance is geometric proximity only — not Pc.'
-                  : '最近距離僅為幾何接近，非 Pc。'}
-              </p>
+              <p className="sx-muted">{tSuite('proximity.illustrative', language)}</p>
             </div>
-            <table className="fetscape-table" data-testid="proximity-table">
+            <table className="sx-table sx-table--stack" data-testid="proximity-table">
+              <caption className="sx-muted" style={{ textAlign: 'left', padding: '8px 12px' }}>
+                Geometric proximity
+              </caption>
               <thead>
                 <tr>
                   <th>Object</th>
                   <th>TCA (UTC)</th>
-                  <th>Miss (km)</th>
-                  <th>Rel. V (km/s)</th>
-                  <th>Note</th>
+                  <th className="sx-num">Miss (km)</th>
+                  <th className="sx-num">Rel. V (km/s)</th>
                 </tr>
               </thead>
               <tbody>
                 {screenResult.snapshot.approaches.map((a) => (
                   <tr key={a.targetId + a.tcaUtc}>
-                    <td>{a.targetName}</td>
-                    <td>{a.tcaUtc.slice(0, 16)}</td>
-                    <td>{a.missDistanceKm.toFixed(1)}</td>
-                    <td>{a.relativeVelocityKmS.toFixed(2)}</td>
-                    <td>{a.note}</td>
+                    <td data-label="Object">{a.targetName}</td>
+                    <td data-label="TCA" className="sx-num">
+                      {a.tcaUtc.slice(0, 16)}
+                    </td>
+                    <td data-label="Miss (km)" className="sx-num sx-proximity">
+                      {a.missDistanceKm.toFixed(1)}
+                    </td>
+                    <td data-label="Rel. V" className="sx-num sx-proximity">
+                      {a.relativeVelocityKmS.toFixed(2)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </section>
-
-          {trace ? (
-            <section className="fetscape-panel" data-testid="analysis-results">
-              <div className="fetscape-panel-head">
-                <div>
-                  <h2>{t('missionReadiness.title', language)}</h2>
-                  <p>{trace.task}</p>
-                </div>
-                <div
-                  className={`fetscape-status ${trace.verificationStatus}`}
-                  data-testid="verification-status"
-                >
-                  {t(`common.${trace.verificationStatus}`, language)}
-                </div>
-              </div>
-              <div className="fetscape-safety" data-testid="safety-disclaimers">
-                <strong>⚠ {t('safety.title', language)}</strong>
-                <ul>
-                  <li>{t('missionReadiness.disclaimers.geometricOnly', language)}</li>
-                  <li>{t('missionReadiness.disclaimers.decisionSupport', language)}</li>
-                  <li>{t('missionReadiness.disclaimers.noManeuvers', language)}</li>
-                  <li>{t('missionReadiness.disclaimers.noCommanding', language)}</li>
-                </ul>
-              </div>
-              {trace.finalResponse ? (
-                <pre className="fetscape-report" data-testid="evidence-pack">
-                  {trace.finalResponse}
-                </pre>
-              ) : (
-                <p className="fetscape-muted">
-                  {language === 'en'
-                    ? 'Preloaded judge trace. Continue the walkthrough to generate a verified evidence pack.'
-                    : '預載評審軌跡。繼續導覽以產生已驗證的證據包。'}
-                </p>
-              )}
-            </section>
-          ) : null}
         </>
       ) : null}
 
-      {currentTab === 'debris' ? (
-        <section className="fetscape-panel" data-testid="debris-planner">
-          <div className="fetscape-concept-banner" data-testid="concept-study-banner">
-            {language === 'en'
-              ? 'Decision support for a qualified operator only. Concept-study ranking from a frozen CelesTrak derelict snapshot — no maneuver advice, no commanding, not Pc.'
-              : '僅供合格操作員決策支援。來自凍結 CelesTrak 廢棄物體快照的概念排序——無機動建議、無指令、非 Pc。'}
+      {productTab === 'debris' ? (
+        <section data-testid="debris-planner">
+          <div className="sx-note" data-testid="concept-study-banner">
+            {tSuite('debris.decisionBanner', language)}
           </div>
-          <h2>{t('debrisRemoval.title', language)}</h2>
+          <h2>{tSuite('debris.h2', language)}</h2>
+          <p className="sx-muted">{tSuite('debris.sub', language)}</p>
           <p data-testid="derelict-source">
             {language === 'en' ? 'Source: ' : '來源：'}
             {derelict.meta.source}
             <br />
-            <code>SHA-256 {derelict.meta.contentSha256.slice(0, 20)}…</code>
-            <br />
-            {derelict.meta.note}
+            <code className="sx-mono">SHA-256 {derelict.meta.contentSha256.slice(0, 20)}…</code>
           </p>
-          <table className="fetscape-table" data-testid="derelict-ranking-table">
+          <table className="sx-table sx-table--stack" data-testid="derelict-ranking-table">
             <thead>
               <tr>
                 <th>#</th>
                 <th>Object</th>
                 <th>Class</th>
-                <th>Alt (km)</th>
-                <th>Lifetime (yr)</th>
-                <th>Shell N</th>
-                <th>Score</th>
+                <th className="sx-num">Alt (km)</th>
+                <th className="sx-num">Lifetime (yr)</th>
+                <th className="sx-num">Score</th>
               </tr>
             </thead>
             <tbody>
-              {ranked.map((row, idx) => (
+              {visibleRanked.map((row, idx) => (
                 <tr
                   key={row.id}
                   className={selected?.id === row.id ? 'selected' : ''}
                   data-testid={`derelict-row-${row.catalogId}`}
                 >
-                  <td>{idx + 1}</td>
-                  <td>
-                    <button type="button" onClick={() => setSelectedTargetId(row.id)}>
+                  <td data-label="#">{idx + 1}</td>
+                  <td data-label="Object">
+                    <button
+                      type="button"
+                      className="sx-btn sx-btn--ghost"
+                      style={{ height: 'auto', padding: 0 }}
+                      onClick={() => setSelectedTargetId(row.id)}
+                    >
                       {row.name}
                     </button>
+                    <span
+                      className="sx-score-bar"
+                      style={{ width: `${Math.round(row.rankingScore * 80)}px`, marginLeft: 8 }}
+                      title={`score ${row.rankingScore}`}
+                    />
                   </td>
-                  <td>{row.objectClass}</td>
-                  <td>{Math.round(row.altitude)}</td>
-                  <td>{row.estimatedLifetimeYears}</td>
-                  <td>{row.shellDensityNearby}</td>
-                  <td>{row.rankingScore}</td>
+                  <td data-label="Class">{row.objectClass}</td>
+                  <td data-label="Alt" className="sx-num">
+                    {Math.round(row.altitude)}
+                  </td>
+                  <td data-label="Lifetime" className="sx-num">
+                    {row.estimatedLifetimeYears}
+                  </td>
+                  <td data-label="Score" className="sx-num">
+                    {row.rankingScore}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div className="sx-hero__actions">
+            <button
+              type="button"
+              className="sx-btn sx-btn--secondary"
+              onClick={() => setShowAllDebris((v) => !v)}
+            >
+              {showAllDebris
+                ? tSuite('debris.showTop', language)
+                : `${tSuite('debris.showAll', language)} ${ranked.length}`}
+            </button>
+            <button
+              type="button"
+              className="sx-btn sx-btn--primary"
+              onClick={() => requestExport('ranking')}
+            >
+              {tSuite('debris.export', language)}
+            </button>
+          </div>
 
           {selected ? (
-            <div className="fetscape-target-detail" data-testid="derelict-detail">
+            <div className="sx-card" data-testid="derelict-detail" style={{ marginTop: 16 }}>
               <h3>
-                {selected.name} <span className="fetscape-muted">NORAD {selected.catalogId}</span>
+                {selected.name} <span className="sx-muted sx-num">NORAD {selected.catalogId}</span>
               </h3>
-              <p className="fetscape-muted">
-                {language === 'en'
-                  ? 'Trade-offs cite the data source for each score. Mass/size are not observed from GP.'
-                  : '每項分數皆標明資料來源。質量／尺寸並非由 GP 觀測而得。'}
-              </p>
               <ul data-testid="derelict-criteria">
                 {selected.criteriaDetail.map((c) => (
                   <li key={c.criterion}>
                     <strong>{c.criterion}</strong> (w={c.weight}, score={c.score.toFixed(2)}):{' '}
                     {c.value}
                     <br />
-                    <span className="fetscape-muted">source: {c.source}</span>
+                    <span className="sx-muted">source: {c.source}</span>
                     <br />
-                    <span className="fetscape-muted">trade-off: {c.tradeOff}</span>
+                    <span className="sx-muted">trade-off: {c.tradeOff}</span>
                   </li>
                 ))}
               </ul>
@@ -426,46 +618,126 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
           <pre className="fetscape-report" data-testid="debris-report">
             {debrisReport}
           </pre>
-          <p className="fetscape-muted">
-            {language === 'en'
-              ? 'Open Capture rehearsal from the sidebar for a near-field rendezvous concept simulation. Planning context stays separate from local synthetic state.'
-              : '從側邊欄開啟捕獲演練以進行近場交會概念模擬。規劃脈絡與本地合成狀態保持分離。'}
-          </p>
         </section>
       ) : null}
 
-      {pendingApprovals.some((a) => a.status === 'pending') ? (
-        <section className="fetscape-approval" data-testid="approval-card">
-          <div className="fetscape-approval-banner">
-            <strong>{t('approval.title', language)}</strong>
-            <span>{t('approval.description', language)}</span>
+      {pendingApprovals.some((a) => a.status === 'pending') && approvalKind ? (
+        <section
+          className="sx-approval"
+          data-testid="approval-card"
+          role="region"
+          aria-labelledby="sx-approval-heading"
+        >
+          <div className="sx-approval-banner">
+            <strong id="sx-approval-heading">{tSuite('approval.needs', language)}</strong>
+            <span>
+              {approvalKind === 'evidence'
+                ? tSuite('approval.exportTitle', language)
+                : tSuite('approval.exportRanking', language)}
+            </span>
           </div>
           {pendingApprovals
             .filter((a) => a.status === 'pending')
             .map((approval) => (
-              <div key={approval.id} className="fetscape-approval-body">
-                <h3>{approval.title}</h3>
-                <p>{approval.description}</p>
-                <div className="fetscape-approval-actions">
+              <div key={approval.id}>
+                <dl className="sx-approval__facts">
+                  <div>
+                    <dt>{tSuite('approval.what', language)}</dt>
+                    <dd>{tSuite('approval.whatBody', language)}</dd>
+                  </div>
+                  <div>
+                    <dt>{tSuite('approval.scope', language)}</dt>
+                    <dd>{tSuite('approval.scopeBody', language)}</dd>
+                  </div>
+                  <div>
+                    <dt>{tSuite('approval.files', language)}</dt>
+                    <dd className="sx-mono">fetscape-analysis-*.json</dd>
+                  </div>
+                  <div>
+                    <dt>{tSuite('approval.destination', language)}</dt>
+                    <dd>{tSuite('approval.destinationBody', language)}</dd>
+                  </div>
+                  <div>
+                    <dt>{tSuite('approval.executedBy', language)}</dt>
+                    <dd>{tSuite('approval.executedByBody', language)}</dd>
+                  </div>
+                </dl>
+                <div className="sx-approval__actions">
                   <button
                     type="button"
                     data-testid="approve-export"
-                    className="fetscape-approve"
+                    className="sx-btn sx-btn--primary"
                     onClick={() => handleApproval(approval.id, true)}
                   >
-                    {t('common.approve', language)}
+                    {tSuite('approval.approveExport', language)}
                   </button>
                   <button
                     type="button"
                     data-testid="reject-export"
+                    className="sx-btn sx-btn--ghost"
                     onClick={() => handleApproval(approval.id, false)}
                   >
-                    {t('common.reject', language)}
+                    {tSuite('approval.notNow', language)}
                   </button>
                 </div>
+                <p className="sx-approval__reassurance">
+                  {tSuite('approval.reassurance', language)}
+                </p>
+                <details className="sx-disclosure">
+                  <summary>{tSuite('approval.preview', language)}</summary>
+                  <pre className="fetscape-report">
+                    {approvalKind === 'ranking'
+                      ? debrisReport.slice(0, 1200)
+                      : (trace?.finalResponse ?? JSON.stringify(readiness, null, 2))}
+                  </pre>
+                </details>
               </div>
             ))}
         </section>
+      ) : null}
+
+      {judgeMode && !coachHidden ? (
+        <aside className="sx-coach" data-testid="judge-walkthrough">
+          <div className="sx-coach__meta" data-testid="judge-mode-meta">
+            {t('judge.title', language)} — {judgeStep + 1} / {walkthrough.length}
+          </div>
+          <h2 data-testid="walkthrough-title">{currentWalkthroughStep.title[language]}</h2>
+          <p data-testid="walkthrough-description">
+            {currentWalkthroughStep.description[language]}
+          </p>
+          <div className="sx-coach__actions">
+            {judgeStep > 0 ? (
+              <button
+                type="button"
+                className="sx-btn sx-btn--ghost"
+                data-testid="walkthrough-prev"
+                onClick={() => setJudgeStep(Math.max(0, judgeStep - 1))}
+              >
+                {tSuite('coach.back', language)}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="sx-btn sx-btn--primary"
+              data-testid="walkthrough-next"
+              onClick={() => void handleJudgeNext()}
+            >
+              {judgeStep === walkthrough.length - 1
+                ? t('judge.finish', language)
+                : tSuite('coach.next', language)}
+            </button>
+            <button
+              type="button"
+              className="sx-btn sx-btn--ghost"
+              onClick={() => {
+                setCoachHidden(true);
+                onJudgeModeChange?.(false);
+              }}
+            >
+              {tSuite('coach.hide', language)}
+            </button>
+          </div>
+        </aside>
       ) : null}
 
       {analyzing ? (
@@ -474,9 +746,6 @@ export default function FetscapeApp({ mode = 'judge', apiKey }: FetscapeAppProps
             <div className="fetscape-spinner" aria-hidden="true" />
             <div>{t('missionReadiness.analyzing', language)}</div>
             <p>{progressLabel || t('common.loading', language)}</p>
-            <div className="fetscape-progress-track">
-              <div className="fetscape-progress-bar" />
-            </div>
           </div>
         </div>
       ) : null}

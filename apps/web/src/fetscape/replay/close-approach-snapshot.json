@@ -5,34 +5,34 @@
   "thresholdKm": 100,
   "approaches": [
     {
-      "targetName": "STARLINK-1234",
-      "targetId": "norad-44567",
+      "targetName": "ILLUSTRATIVE-TARGET-A",
+      "targetId": "synthetic-a",
       "tcaUtc": "2026-11-26T08:42:15.000Z",
       "missDistanceKm": 42.3,
       "relativeVelocityKmS": 14.2,
       "isFiltered": true,
-      "note": "Geometric screening only. Not Pc."
+      "note": "Illustrative replay · Geometric proximity only. Not Pc."
     },
     {
-      "targetName": "ONEWEB-0089",
-      "targetId": "norad-46123",
+      "targetName": "ILLUSTRATIVE-TARGET-B",
+      "targetId": "synthetic-b",
       "tcaUtc": "2026-11-26T14:18:33.000Z",
       "missDistanceKm": 78.9,
       "relativeVelocityKmS": 13.8,
       "isFiltered": true,
-      "note": "Geometric screening only. Not Pc."
+      "note": "Illustrative replay · Geometric proximity only. Not Pc."
     },
     {
-      "targetName": "COSMOS 2251 DEB",
-      "targetId": "norad-33442",
+      "targetName": "ILLUSTRATIVE-DEB-C",
+      "targetId": "synthetic-c",
       "tcaUtc": "2026-11-26T19:05:51.000Z",
       "missDistanceKm": 156.4,
       "relativeVelocityKmS": 15.1,
       "isFiltered": false,
-      "note": "Geometric screening only. Not Pc."
+      "note": "Illustrative replay · Geometric proximity only. Not Pc."
     }
   ],
-  "dataSource": "Preloaded demo snapshot for judge mode / CI replay",
+  "dataSource": "Illustrative replay snapshot for judge mode / CI (not live catalog identities)",
   "acquiredAt": "2026-11-25T19:00:00.000Z",
   "totalScreened": 3,
   "excludedDocked": ["ISS (ZARYA)", "POISK", "PROGRESS-MS"],

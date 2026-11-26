@@ -1,13 +1,11 @@
 /**
- * Judge-mode E2E: offline walkthrough, ADR ranking, live-mode opt-in UI (replay default).
- * Local API serves the built app at / (not GitHub Pages /fetscape/ base).
+ * Judge-mode E2E: Suite UI home is Fetscape; offline walkthrough, ADR, live opt-in.
  */
 
 import { test, expect } from '@playwright/test';
 
 async function openFetscape(page: import('@playwright/test').Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Fetscape AI Workspace' }).click();
   await expect(page.getByTestId('fetscape-app')).toBeVisible();
   await expect(page.getByTestId('fetscape-brand')).toHaveText('Fetscape');
   await expect(page.getByTestId('judge-mode-badge')).toBeVisible();
@@ -60,7 +58,7 @@ test.describe('Fetscape Judge Mode', () => {
 
   test('ADR planner ranks bundled derelicts with cited trade-offs', async ({ page }) => {
     await openFetscape(page);
-    await page.getByTestId('tab-debris').click();
+    await page.getByTestId('tab-debris').first().click();
     await expect(page.getByTestId('debris-planner')).toBeVisible();
     await expect(page.getByTestId('concept-study-banner')).toContainText('Decision support');
     await expect(page.getByTestId('derelict-source')).toContainText('CelesTrak');
@@ -86,7 +84,6 @@ test.describe('Fetscape Judge Mode', () => {
 
     await page.getByTestId('live-mode-toggle').check();
     await expect(page.getByTestId('live-mode-toggle')).toBeChecked();
-    // CI stays offline: opt-in only changes the action label; live fetch is not required to succeed.
     await expect(page.getByTestId('run-proximity-screen')).toContainText(/live/i);
   });
 

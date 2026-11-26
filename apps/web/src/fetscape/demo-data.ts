@@ -4,6 +4,7 @@
  */
 
 import type { MissionProfile, AgentTrace } from './types';
+import { computeReadiness } from './readiness';
 
 export const DEMO_MISSIONS: MissionProfile[] = [
   {
@@ -39,17 +40,22 @@ export const DEMO_MISSIONS: MissionProfile[] = [
   },
 ];
 
+const defaultReadiness = computeReadiness(DEMO_MISSIONS[0]);
+
 export const DEMO_TRACE: AgentTrace = {
   id: 'demo-trace-taiwan-cubesat',
   task: 'Mission readiness analysis for Taiwan CubeSat Demo Mission',
   steps: [
     {
-      thought: 'Analyzing orbital shell density around 510 km',
+      thought: 'Analyzing orbital shell density around mission altitude',
       toolCalls: [
         {
           id: 'tool-demo-1',
           tool: 'analyze_shell_density',
-          arguments: { altitudeKm: 510, shellThicknessKm: 50 },
+          arguments: {
+            altitudeKm: DEMO_MISSIONS[0].orbit.altitude,
+            shellThicknessKm: 50,
+          },
           timestamp: Date.now(),
         },
       ],
@@ -58,17 +64,14 @@ export const DEMO_TRACE: AgentTrace = {
           toolCallId: 'tool-demo-1',
           success: true,
           data: {
-            targetAltitudeKm: 510,
-            objectsInShell: 1247,
-            shellRangeKm: [485, 535],
-            nearbyBins: [
-              { altitudeKm: 450, count: 892 },
-              { altitudeKm: 500, count: 1247 },
-              { altitudeKm: 550, count: 2103 },
+            targetAltitudeKm: defaultReadiness.shellAltitudeKm,
+            objectsInShell: defaultReadiness.shellObjects,
+            shellRangeKm: [
+              defaultReadiness.shellAltitudeKm - 25,
+              defaultReadiness.shellAltitudeKm + 25,
             ],
-            totalActive: 9847,
-            dataSource: 'CelesTrak active satellites (demo data)',
-            acquiredAt: new Date().toISOString(),
+            dataSource: defaultReadiness.shellSource,
+            acquiredAt: defaultReadiness.shellSnapshotDate,
           },
           timestamp: Date.now(),
         },
@@ -81,10 +84,10 @@ export const DEMO_TRACE: AgentTrace = {
           id: 'tool-demo-2',
           tool: 'estimate_deorbit_lifetime',
           arguments: {
-            altitudeKm: 510,
-            massKg: 10,
-            inclination: 97.5,
-            eccentricity: 0.001,
+            altitudeKm: DEMO_MISSIONS[0].orbit.altitude,
+            massKg: DEMO_MISSIONS[0].mass,
+            inclination: DEMO_MISSIONS[0].orbit.inclination,
+            eccentricity: DEMO_MISSIONS[0].orbit.eccentricity,
           },
           timestamp: Date.now(),
         },
@@ -94,21 +97,12 @@ export const DEMO_TRACE: AgentTrace = {
           toolCallId: 'tool-demo-2',
           success: true,
           data: {
-            estimatedLifetimeYears: 8.5,
-            complies25Year: true,
-            complies5Year: false,
-            method: 'Simplified King-Hele atmospheric drag model',
-            assumptions: [
-              'Drag coefficient Cd = 2.2',
-              'Circular orbit approximation',
-              'No propulsion or active deorbit',
-              'Solar activity at moderate levels',
-            ],
-            uncertainties: [
-              'Atmospheric density model is simplified',
-              'Solar activity variations not modeled',
-              'Actual lifetime may vary by factor of 2-5×',
-            ],
+            estimatedLifetimeYears: defaultReadiness.lifetimeYears,
+            complies25Year: defaultReadiness.complies25Year,
+            complies5Year: defaultReadiness.complies5Year,
+            method: defaultReadiness.method,
+            assumptions: defaultReadiness.assumptions,
+            uncertainties: defaultReadiness.uncertainties,
           },
           timestamp: Date.now(),
         },
@@ -122,116 +116,113 @@ export const DEMO_TRACE: AgentTrace = {
   tokenUsage: 0,
 };
 
-export const WALKTHROUGH_STEPS = [
-  {
-    id: 'intro',
-    title: {
-      en: 'Welcome to Fetscape AI-Native Workspace',
-      'zh-TW': '歡迎使用 Fetscape AI 原生工作空間',
+export type WalkthroughStep = {
+  id: string;
+  title: { en: string; 'zh-TW': string };
+  description: { en: string; 'zh-TW': string };
+  action: { en: string; 'zh-TW': string };
+};
+
+/** Build walkthrough copy from live readiness numbers (no hard-coded 1247 / 8.5). */
+export function buildWalkthroughSteps(
+  readiness: ReturnType<typeof computeReadiness>,
+): WalkthroughStep[] {
+  const life = readiness.lifetimeYears;
+  const shell = readiness.shellObjects;
+  const alt = readiness.shellAltitudeKm;
+  const nstc = readiness.complies25Year ? 'within' : 'exceeds';
+  const fcc = readiness.complies5Year ? 'within' : 'exceeds';
+  const nstcZh = readiness.complies25Year ? '符合' : '超出';
+  const fccZh = readiness.complies5Year ? '符合' : '超出';
+
+  return [
+    {
+      id: 'intro',
+      title: {
+        en: 'Welcome to Fetscape',
+        'zh-TW': '歡迎使用 Fetscape',
+      },
+      description: {
+        en: 'Pre-launch readiness for smallsat teams: disposal, shell density, and a cited evidence pack. Decision support for a qualified operator.',
+        'zh-TW':
+          '小型衛星團隊的發射前整備：離軌處置、殼層密度與附引用的證據包。僅供合格操作員決策支援。',
+      },
+      action: { en: 'Next', 'zh-TW': '下一步' },
     },
-    description: {
-      en: "This is an AI-native space operations workspace where AI is the core of the product, not just a chatbot. Let's walk through a mission readiness analysis.",
-      'zh-TW':
-        '這是一個 AI 原生太空作業工作空間，AI 是產品的核心，而不僅僅是聊天機器人。讓我們逐步進行任務整備度分析。',
+    {
+      id: 'mission-input',
+      title: {
+        en: 'Define Mission Profile',
+        'zh-TW': '定義任務概況',
+      },
+      description: {
+        en: `Default preset: Taiwan 8U CubeSat at ${alt} km SSO, mass ${DEMO_MISSIONS[0].mass} kg, no propulsion. Change the preset chips anytime.`,
+        'zh-TW': `預設：台灣 8U 立方衛星、${alt} km 太陽同步軌道、質量 ${DEMO_MISSIONS[0].mass} kg、無推進。可隨時切換預設。`,
+      },
+      action: { en: 'Analyze', 'zh-TW': '分析' },
     },
-    action: {
-      en: 'Start Analysis',
-      'zh-TW': '開始分析',
+    {
+      id: 'density-analysis',
+      title: {
+        en: 'Orbital Shell Density',
+        'zh-TW': '軌道殼層密度',
+      },
+      description: {
+        en: `Tool output for this profile: ${shell} objects from the bundled CelesTrak derelict snapshot within ±25 km of ${alt} km (snapshot ${readiness.shellSnapshotDate}). Catalog-relative, not a full LEO census.`,
+        'zh-TW': `此任務設定的工具輸出：內建 CelesTrak 廢棄物體快照中，距 ${alt} km ±25 km 有 ${shell} 個物體（快照 ${readiness.shellSnapshotDate}）。為目錄相對值，非完整 LEO 普查。`,
+      },
+      action: { en: 'Next', 'zh-TW': '下一步' },
     },
-  },
-  {
-    id: 'mission-input',
-    title: {
-      en: 'Step 1: Define Mission Profile',
-      'zh-TW': '步驟 1：定義任務概況',
+    {
+      id: 'deorbit-analysis',
+      title: {
+        en: 'Deorbit Lifetime',
+        'zh-TW': '離軌壽命',
+      },
+      description: {
+        en: `Screening estimate ${life} yr (range ${readiness.lifetimeRange[0]}–${readiness.lifetimeRange[1]}). NSTC 25-year: ${nstc}. FCC 5-year: ${fcc}.`,
+        'zh-TW': `篩選估計 ${life} 年（範圍 ${readiness.lifetimeRange[0]}–${readiness.lifetimeRange[1]}）。NSTC 25 年：${nstcZh}。FCC 5 年：${fccZh}。`,
+      },
+      action: { en: 'Next', 'zh-TW': '下一步' },
     },
-    description: {
-      en: "We'll analyze a typical Taiwan 8U cubesat mission: SSO orbit at 510 km, no propulsion, launching in 2027.",
-      'zh-TW':
-        '我們將分析一個典型的台灣 8U 立方衛星任務：太陽同步軌道 510 公里，無推進系統，2027 年發射。',
+    {
+      id: 'regulations',
+      title: {
+        en: 'Regulatory Compliance',
+        'zh-TW': '法規遵循',
+      },
+      description: {
+        en: 'Citations for Taiwan NSTC and FCC disposal guidance are attached in the evidence pack for operator review.',
+        'zh-TW': '證據包附有台灣 NSTC 與 FCC 離軌處置指引引用，供操作員審查。',
+      },
+      action: { en: 'Next', 'zh-TW': '下一步' },
     },
-    action: {
-      en: 'Analyze',
-      'zh-TW': '分析',
+    {
+      id: 'approval',
+      title: {
+        en: 'Approval Card',
+        'zh-TW': '核准卡',
+      },
+      description: {
+        en: 'Export requires explicit approval. Nothing is sent anywhere.',
+        'zh-TW': '匯出需要明確核准。不會傳送到任何地方。',
+      },
+      action: { en: 'Next', 'zh-TW': '下一步' },
     },
-  },
-  {
-    id: 'density-analysis',
-    title: {
-      en: 'Step 2: Orbital Shell Density',
-      'zh-TW': '步驟 2：軌道殼層密度',
+    {
+      id: 'complete',
+      title: {
+        en: 'Demo Complete',
+        'zh-TW': '展示完成',
+      },
+      description: {
+        en: 'You have walked the readiness loop with deterministic tools, verifier, and safety boundaries.',
+        'zh-TW': '你已完成整備流程：確定性工具、驗證器與安全界限。',
+      },
+      action: { en: 'Finish', 'zh-TW': '完成' },
     },
-    description: {
-      en: 'The agent fetches CelesTrak data and analyzes the shell density. At 510 km, there are approximately 1,247 active objects within ±25 km.',
-      'zh-TW':
-        '代理抓取 CelesTrak 資料並分析殼層密度。在 510 公里處，±25 公里範圍內約有 1,247 個活躍物體。',
-    },
-    action: {
-      en: 'Next',
-      'zh-TW': '下一步',
-    },
-  },
-  {
-    id: 'deorbit-analysis',
-    title: {
-      en: 'Step 3: Deorbit Lifetime',
-      'zh-TW': '步驟 3：離軌壽命',
-    },
-    description: {
-      en: 'Without propulsion, the estimated atmospheric drag lifetime is 8.5 years. This complies with NSTC 25-year rule but exceeds FCC 5-year limit.',
-      'zh-TW':
-        '在沒有推進系統的情況下，估計的大氣阻力壽命為 8.5 年。這符合 NSTC 25 年規則，但超過 FCC 5 年限制。',
-    },
-    action: {
-      en: 'Next',
-      'zh-TW': '下一步',
-    },
-  },
-  {
-    id: 'regulations',
-    title: {
-      en: 'Step 4: Regulatory Compliance',
-      'zh-TW': '步驟 4：法規遵循',
-    },
-    description: {
-      en: 'The agent retrieves relevant Taiwan NSTC and FCC regulations with citations. It generates a compliance checklist for registration review.',
-      'zh-TW':
-        '代理檢索相關的台灣 NSTC 和 FCC 法規並附上引用。它產生一個合規檢查清單用於登錄審查。',
-    },
-    action: {
-      en: 'Next',
-      'zh-TW': '下一步',
-    },
-  },
-  {
-    id: 'approval',
-    title: {
-      en: 'Step 5: Approval Card',
-      'zh-TW': '步驟 5：核准卡',
-    },
-    description: {
-      en: 'Before exporting the evidence pack, explicit user approval is required. No automatic file generation or external communications.',
-      'zh-TW': '在匯出證據包之前，需要明確的使用者核准。無自動檔案產生或外部通訊。',
-    },
-    action: {
-      en: 'Approve Export',
-      'zh-TW': '核准匯出',
-    },
-  },
-  {
-    id: 'complete',
-    title: {
-      en: 'Demo Complete',
-      'zh-TW': '展示完成',
-    },
-    description: {
-      en: "You've seen how Fetscape uses AI as the core orchestrator with deterministic tools, verifier, and safety boundaries. Ready for real missions with BYOK API keys.",
-      'zh-TW':
-        '您已經看到 Fetscape 如何使用 AI 作為核心編排器，配備確定性工具、驗證器和安全界限。已準備好使用 BYOK API 金鑰進行真實任務。',
-    },
-    action: {
-      en: 'Finish',
-      'zh-TW': '完成',
-    },
-  },
-];
+  ];
+}
+
+/** @deprecated Prefer buildWalkthroughSteps(readiness) */
+export const WALKTHROUGH_STEPS = buildWalkthroughSteps(defaultReadiness);
